@@ -1,0 +1,326 @@
+// Schéma de données - Plateforme RDV médical + Téléconsultation + CRM
+// SQLite en développement/démo (zéro-config). Prisma ne supportant pas les enums natifs
+// sous SQLite, les valeurs "enum" sont des String contraintes côté application (voir src/lib/enums.ts)
+// afin de rester portable vers PostgreSQL (recommandé en production, cf. README).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------------------------------------------------------------------------
+// Utilisateurs & rôles
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String // PATIENT | PRACTITIONER | SECRETARY | ADMIN
+  firstName    String
+  lastName     String
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  practitioner        Practitioner?
+  secretaryProfile    SecretaryProfile?
+  patientProfile      Patient?
+  journalEntries      JournalActivite[]
+  tasksAssigned       Tache[]              @relation("TacheAssignee")
+  internalMessages    MessageInterne[]
+  conversationMembers ConversationMember[]
+}
+
+model Establishment {
+  id      String  @id @default(cuid())
+  name    String
+  address String
+  city    String
+  zip     String?
+  phone   String?
+
+  practitioners Practitioner[]
+  appointments  RendezVous[]
+  quota         Quota?
+
+  createdAt DateTime @default(now())
+}
+
+model Practitioner {
+  id                     String  @id @default(cuid())
+  userId                 String  @unique
+  user                   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  establishmentId        String?
+  establishment          Establishment? @relation(fields: [establishmentId], references: [id])
+  specialty              String
+  bio                    String?
+  address                String?
+  city                   String?
+  photoUrl               String?
+  color                  String  @default("#2563eb") // couleur agenda
+  paymentMethods         String? // CSV libre : "CB,Chèque,Espèces"
+  acceptsOnlineBooking   Boolean @default(true)
+  cancellationDeadlineH  Int     @default(24) // délai d'annulation en heures
+
+  motifs         Motif[]
+  availabilities Availability[]
+  timeOffs       TimeOff[]
+  appointments   RendezVous[]
+  secretaries    SecretaryAssignment[]
+
+  createdAt DateTime @default(now())
+}
+
+model SecretaryProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  practitioners SecretaryAssignment[]
+  createdAt     DateTime               @default(now())
+}
+
+model SecretaryAssignment {
+  id             String           @id @default(cuid())
+  secretaryId    String
+  secretary      SecretaryProfile @relation(fields: [secretaryId], references: [id], onDelete: Cascade)
+  practitionerId String
+  practitioner   Practitioner     @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+
+  @@unique([secretaryId, practitionerId])
+}
+
+model Patient {
+  id        String    @id @default(cuid())
+  userId    String?   @unique
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  birthDate DateTime?
+  address   String?
+  city      String?
+  notes     String?
+
+  appointments        RendezVous[]
+  conversationsPatient ConversationPatient[]
+
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Motifs de consultation (personnalisables par praticien)
+// ---------------------------------------------------------------------------
+
+model Motif {
+  id             String       @id @default(cuid())
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  name           String
+  color          String       @default("#16a34a")
+  durationMin    Int          @default(30)
+  type           String       @default("CABINET") // CABINET | DOMICILE | VIDEO
+  onlineBookable Boolean      @default(false) // par défaut : non réservable en ligne
+  active         Boolean      @default(true)
+  sortOrder      Int          @default(0)
+
+  appointments RendezVous[]
+  slotRestrictions AvailabilityMotif[]
+
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Disponibilités / agenda
+// ---------------------------------------------------------------------------
+
+// Plage récurrente hebdomadaire définissant les créneaux ouverts d'un praticien
+model Availability {
+  id             String       @id @default(cuid())
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  dayOfWeek      Int // 0 = dimanche ... 6 = samedi
+  startTime      String // "HH:mm"
+  endTime        String // "HH:mm"
+  slotDurationMin Int         @default(30)
+  visibility     String       @default("PUBLIC") // PUBLIC (patient + secrétariat) | INTERNAL (secrétariat/praticien uniquement)
+
+  restrictedMotifs AvailabilityMotif[] // si vide => tous les motifs réservables du praticien sont acceptés
+
+  createdAt DateTime @default(now())
+}
+
+// Restriction d'une plage de disponibilité à certains motifs uniquement
+model AvailabilityMotif {
+  id             String       @id @default(cuid())
+  availabilityId String
+  availability   Availability @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
+  motifId        String
+  motif          Motif        @relation(fields: [motifId], references: [id], onDelete: Cascade)
+
+  @@unique([availabilityId, motifId])
+}
+
+// Congés / jours fermés / exceptions ponctuelles
+model TimeOff {
+  id             String       @id @default(cuid())
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  start          DateTime
+  end            DateTime
+  reason         String?
+
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Rendez-vous & téléconsultation
+// ---------------------------------------------------------------------------
+
+model RendezVous {
+  id              String        @id @default(cuid())
+  practitionerId  String
+  practitioner    Practitioner  @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  patientId       String
+  patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  motifId         String
+  motif           Motif         @relation(fields: [motifId], references: [id])
+  establishmentId String?
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id])
+
+  start  DateTime
+  end    DateTime
+  status String   @default("CONFIRMED") // CONFIRMED | CANCELLED | COMPLETED | NO_SHOW
+  notes  String?
+
+  createdById String? // user ayant créé le RDV (patient, secrétaire ou praticien)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  cancelledAt DateTime?
+  cancelReason String?
+
+  teleconsultation Teleconsultation?
+  reminders        ReminderLog[]
+  tasks            Tache[]
+
+  @@index([practitionerId, start])
+  @@index([patientId])
+}
+
+model Teleconsultation {
+  id            String     @id @default(cuid())
+  appointmentId String     @unique
+  appointment   RendezVous @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  roomName      String     @unique
+  status        String     @default("SCHEDULED") // SCHEDULED | WAITING_ROOM | ACTIVE | ENDED
+  patientJoinedAt    DateTime?
+  practitionerJoinedAt DateTime?
+  endedAt       DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model ReminderLog {
+  id            String     @id @default(cuid())
+  appointmentId String
+  appointment   RendezVous @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  channel       String // SMS | EMAIL
+  kind          String // CONFIRMATION | REMINDER_J1 | REMINDER_H1 | CANCELLATION
+  status        String     @default("SENT") // SENT | FAILED
+  sentAt        DateTime   @default(now())
+}
+
+// Quotas SMS / signatures électroniques (facturables), par établissement
+model Quota {
+  id              String        @id @default(cuid())
+  establishmentId String        @unique
+  establishment   Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  smsRemaining    Int           @default(100)
+  signaturesRemaining Int       @default(20)
+  updatedAt       DateTime      @updatedAt
+}
+
+model JournalActivite {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String?
+  metadata   String? // JSON libre
+  createdAt  DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Stubs d'extensibilité — Bloc 2 (CRM), Bloc 3 (télé-secrétariat / messagerie / tâches)
+// Modèles présents dans le schéma pour préparer l'architecture (cf. README §Roadmap),
+// UI non livrée dans ce MVP.
+// ---------------------------------------------------------------------------
+
+model Devis {
+  id          String   @id @default(cuid())
+  clientNom   String
+  objet       String
+  montant     Float
+  statut      String   @default("BROUILLON") // BROUILLON | ENVOYE | SIGNE | EXPIRE
+  dateCreation DateTime @default(now())
+  dateRelance DateTime?
+}
+
+model Tache {
+  id          String     @id @default(cuid())
+  titre       String
+  description String?
+  echeance    DateTime?
+  priorite    String     @default("NORMALE") // BASSE | NORMALE | HAUTE
+  statut      String     @default("A_FAIRE") // A_FAIRE | EN_COURS | FAIT
+  assigneId   String?
+  assigne     User?      @relation("TacheAssignee", fields: [assigneId], references: [id])
+  appointmentId String?
+  appointment RendezVous? @relation(fields: [appointmentId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Conversation {
+  id        String               @id @default(cuid())
+  name      String?
+  isGroup   Boolean              @default(false)
+  members   ConversationMember[]
+  messages  MessageInterne[]
+  createdAt DateTime             @default(now())
+}
+
+model ConversationMember {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+}
+
+model MessageInterne {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         User         @relation(fields: [authorId], references: [id])
+  content        String
+  createdAt      DateTime     @default(now())
+}
+
+model ConversationPatient {
+  id         String   @id @default(cuid())
+  patientId  String
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  statut     String   @default("A_TRAITER") // A_TRAITER | TRAITE
+  createdAt  DateTime @default(now())
+}
