@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { runReminderSweep } from "../src/lib/reminders";
 
 runReminderSweep()

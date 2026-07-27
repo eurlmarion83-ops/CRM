@@ -23,7 +23,7 @@ logiciel de gestion de cabinet réglementé) en modules successifs.
 |---|---|---|
 | Framework | **Next.js 16** (App Router, React 19, Server Actions, Turbopack) | Un seul framework full-stack (UI + API + rendu serveur), déploiement simple, écosystème mature. |
 | Langage | TypeScript strict | Sécurité de type de bout en bout, y compris sur le schéma de données via Prisma. |
-| Base de données | **SQLite** en dev/démo via Prisma + driver adapter `@prisma/adapter-better-sqlite3` | Zéro configuration pour tester le MVP immédiatement. **En production, migrer vers PostgreSQL** (Prisma le supporte nativement ; remplacer l'adapter par `@prisma/adapter-pg` et ajuster `DATABASE_URL`). Les "enums" du modèle sont volontairement des `String` contraints côté application (`src/lib/enums.ts`) car SQLite ne supporte pas les enums natifs Prisma — ce choix reste compatible avec Postgres. |
+| Base de données | **PostgreSQL** via Prisma + driver adapter `@prisma/adapter-pg` | Compatible Vercel Postgres/Neon, Supabase, RDS, ou toute instance Postgres classique — même base en dev et en prod (pas de dérive de schéma). En local, une instance Postgres est nécessaire (voir démarrage rapide). Les "enums" du modèle sont volontairement des `String` contraints côté application (`src/lib/enums.ts`) pour rester simples à faire évoluer sans migration Prisma dédiée. |
 | ORM | Prisma 7 (nouvelle API "driver adapters" et générateur `prisma-client`) | Migrations versionnées, typage généré, requêtes lisibles. |
 | Auth | NextAuth v5 (Credentials + JWT), rôles Patient/Praticien/Secrétaire/Admin | Un seul système d'auth pour les 4 rôles ; mots de passe hashés (bcrypt). Patients peuvent aussi réserver **sans compte** (invité) via un lien signé (HMAC) propre à chaque RDV. |
 | Style | Tailwind CSS v4 | Rapide à itérer, cohérent, sans dépendance CSS-in-JS. |
@@ -34,12 +34,16 @@ logiciel de gestion de cabinet réglementé) en modules successifs.
 
 ## Démarrage rapide
 
-Prérequis : Node.js ≥ 20.9.
+Prérequis : Node.js ≥ 20.9, et une base **PostgreSQL** accessible.
 
 ```bash
+# Option la plus rapide en local : Postgres via Docker
+docker run --name medcrm-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=medcrm -p 5432:5432 -d postgres:16
+
 npm install                # installe les dépendances + génère le client Prisma (postinstall)
-cp .env.example .env       # puis générez un secret : openssl rand -base64 32 → AUTH_SECRET
-npm run db:migrate         # crée la base SQLite locale (prisma/migrations)
+cp .env.example .env       # ajuster DATABASE_URL si besoin, puis générer un secret :
+                            # openssl rand -base64 32 → AUTH_SECRET
+npm run db:migrate         # applique les migrations (prisma/migrations)
 npm run db:seed            # jeu de données de démonstration (praticiens, patients, RDV, devis)
 npm run dev                # http://localhost:3000
 ```
@@ -142,8 +146,8 @@ avec de vraies données de santé.
   hébergeur certifié pour toute donnée de santé réelle (base de données ET service de visio).
 - **RGPD/CNIL** : pas d'AIPD/PIA réalisée, pas de registre des traitements ni de DPO désigné dans
   ce livrable — à faire avant toute donnée réelle. Le mot de passe est haché (bcrypt), les accès
-  sont journalisés (`JournalActivite`), mais aucun chiffrement au repos n'est configuré sur la
-  base SQLite de démo.
+  sont journalisés (`JournalActivite`), mais aucun chiffrement au repos n'est configuré côté
+  application (à couvrir par le choix d'un hébergeur Postgres certifié HDS avec chiffrement au repos).
 - **Téléconsultation** : `meet.jit.si` (démo) n'est pas conforme HDS — voir tableau stack ci-dessus.
 - **Ségur du numérique en santé / PGSSI-S / Pro Santé Connect / INS / DMP / MSSanté** : non
   implémentés (hors périmètre Bloc 1-4).
@@ -163,12 +167,37 @@ npm run build
 npm start
 ```
 
-Points à adapter en production :
-1. `DATABASE_URL` → PostgreSQL (remplacer l'adapter Prisma `better-sqlite3` par `@prisma/adapter-pg` ou
-   équivalent, mettre à jour `src/lib/prisma.ts`).
-2. Renseigner `TWILIO_*` et `RESEND_API_KEY` pour des envois SMS/e-mail réels.
-3. Planifier `/api/cron/reminders` (Vercel Cron, cron système) toutes les 15-30 minutes, avec
-   `CRON_SECRET` renseigné.
-4. Remplacer `NEXT_PUBLIC_JITSI_DOMAIN` par une instance conforme HDS (voir section Conformité).
-5. Générer un nouvel `AUTH_SECRET` en production (`openssl rand -base64 32`), ne jamais réutiliser
-   celui de démo.
+### Déployer sur Vercel
+
+1. **Importer le repo** : sur [vercel.com](https://vercel.com) → *Add New → Project* → sélectionner
+   le repo GitHub `eurlmarion83-ops/crm`, branche `claude/medical-appointment-platform-yc036s`.
+   Vercel détecte Next.js automatiquement (aucune config de build à changer).
+2. **Créer la base Postgres** : onglet *Storage* du projet Vercel → *Create Database* → Postgres
+   (Neon). Vercel propose de connecter directement `DATABASE_URL` (et éventuelles variantes
+   pooled/direct) aux variables d'environnement du projet.
+3. **Variables d'environnement** à renseigner dans *Settings → Environment Variables* :
+   - `DATABASE_URL` (fournie par l'étape 2)
+   - `AUTH_SECRET` → générer avec `openssl rand -base64 32`
+   - `NEXTAUTH_URL` → l'URL Vercel du déploiement (ex. `https://votre-projet.vercel.app`)
+   - `NEXT_PUBLIC_JITSI_DOMAIN` → `meet.jit.si` pour démo (voir avertissement HDS plus haut)
+   - `TWILIO_*` / `RESEND_API_KEY` → optionnel, laisser vide pour rester en mode mock (console)
+   - `CRON_SECRET` → optionnel, à définir si vous protégez `/api/cron/reminders`
+4. **Appliquer les migrations + jeu de données de démo** sur la base Vercel Postgres, depuis votre
+   poste (avec le `DATABASE_URL` de Vercel copié dans votre `.env` local) :
+   ```bash
+   npm run db:migrate
+   npm run db:seed
+   ```
+5. **Déployer** : Vercel build automatiquement au push sur la branche. Une fois en ligne, se
+   connecter avec les [comptes de démonstration](#comptes-de-démonstration).
+6. **Rappels automatiques** : un `vercel.json` avec un cron toutes les 30 min vers
+   `/api/cron/reminders` est déjà inclus. ⚠️ Le plan Hobby de Vercel limite les crons à une
+   exécution par jour — passer en plan Pro pour la fréquence 30 min, ou utiliser un cron externe
+   (GitHub Actions, cron-job.org…) appelant cette route avec l'en-tête
+   `Authorization: Bearer <CRON_SECRET>`.
+
+### Autres points à adapter en production (tout hébergeur)
+
+1. Renseigner `TWILIO_*` et `RESEND_API_KEY` pour des envois SMS/e-mail réels.
+2. Remplacer `NEXT_PUBLIC_JITSI_DOMAIN` par une instance conforme HDS (voir section Conformité).
+3. Générer un nouvel `AUTH_SECRET` en production, ne jamais réutiliser celui de démo.

@@ -1,7 +1,7 @@
 // Schéma de données - Plateforme RDV médical + Téléconsultation + CRM
-// SQLite en développement/démo (zéro-config). Prisma ne supportant pas les enums natifs
-// sous SQLite, les valeurs "enum" sont des String contraintes côté application (voir src/lib/enums.ts)
-// afin de rester portable vers PostgreSQL (recommandé en production, cf. README).
+// PostgreSQL (recommandé en production — Vercel Postgres/Neon, Supabase, RDS...).
+// Les valeurs "enum" restent des String contraintes côté application (voir src/lib/enums.ts) :
+// choix conservé pour rester simple à faire évoluer sans migration de schéma Prisma dédiée.
 
 generator client {
   provider = "prisma-client"
@@ -9,7 +9,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ---------------------------------------------------------------------------

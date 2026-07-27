@@ -1,16 +1,14 @@
 import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 // Singleton Prisma Client (évite d'épuiser les connexions en dev avec le hot-reload Next.js).
-// Choix technique : SQLite + driver adapter en dev/démo (zéro-config, cf. README).
-// En production, remplacer par PrismaPg / adapter Postgres (cf. README §Déploiement).
+// PostgreSQL via driver adapter node-postgres — compatible Vercel Postgres/Neon, Supabase,
+// RDS, ou toute base Postgres classique (cf. README §Déploiement).
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function createPrismaClient() {
-  const adapter = new PrismaBetterSqlite3({
-    url: process.env.DATABASE_URL ?? "file:./dev.db",
-  });
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
   return new PrismaClient({ adapter });
 }
 

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { addDays, addHours, setHours, setMinutes } from "date-fns";
 import { prisma } from "../src/lib/prisma";
