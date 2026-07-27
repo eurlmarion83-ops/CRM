@@ -167,30 +167,37 @@ npm run build
 npm start
 ```
 
-### Déployer sur Vercel
+### Déployer sur Vercel — tout en cloud, sans rien lancer en local
+
+Les migrations Prisma s'exécutent automatiquement à chaque build (`npm run build` inclut
+`prisma migrate deploy`), et le jeu de données de démonstration se génère via une route HTTP
+protégée par un secret. Aucune connexion locale à la base n'est nécessaire.
 
 1. **Importer le repo** : sur [vercel.com](https://vercel.com) → *Add New → Project* → sélectionner
    le repo GitHub `eurlmarion83-ops/crm`, branche `claude/medical-appointment-platform-yc036s`.
    Vercel détecte Next.js automatiquement (aucune config de build à changer).
 2. **Créer la base Postgres** : onglet *Storage* du projet Vercel → *Create Database* → Postgres
-   (Neon). Vercel propose de connecter directement `DATABASE_URL` (et éventuelles variantes
-   pooled/direct) aux variables d'environnement du projet.
+   (Neon). Vercel connecte automatiquement `DATABASE_URL` aux variables d'environnement du projet.
 3. **Variables d'environnement** à renseigner dans *Settings → Environment Variables* :
-   - `DATABASE_URL` (fournie par l'étape 2)
-   - `AUTH_SECRET` → générer avec `openssl rand -base64 32`
-   - `NEXTAUTH_URL` → l'URL Vercel du déploiement (ex. `https://votre-projet.vercel.app`)
+   - `DATABASE_URL` (fournie par l'étape 2, déjà branchée automatiquement)
+   - `AUTH_SECRET` → générer avec `openssl rand -base64 32` (n'importe où : votre terminal, un
+     générateur en ligne...)
+   - `NEXTAUTH_URL` → l'URL Vercel du déploiement (ex. `https://votre-projet.vercel.app`) —
+     à renseigner après le premier déploiement, puis redéployer
+   - `SEED_SECRET` → une valeur aléatoire de votre choix (sert uniquement à protéger l'étape 5)
    - `NEXT_PUBLIC_JITSI_DOMAIN` → `meet.jit.si` pour démo (voir avertissement HDS plus haut)
    - `TWILIO_*` / `RESEND_API_KEY` → optionnel, laisser vide pour rester en mode mock (console)
    - `CRON_SECRET` → optionnel, à définir si vous protégez `/api/cron/reminders`
-4. **Appliquer les migrations + jeu de données de démo** sur la base Vercel Postgres, depuis votre
-   poste (avec le `DATABASE_URL` de Vercel copié dans votre `.env` local) :
-   ```bash
-   npm run db:migrate
-   npm run db:seed
-   ```
-5. **Déployer** : Vercel build automatiquement au push sur la branche. Une fois en ligne, se
-   connecter avec les [comptes de démonstration](#comptes-de-démonstration).
-6. **Rappels automatiques** : un `vercel.json` avec un cron toutes les 30 min vers
+4. **Déployer** : Vercel build automatiquement au push sur la branche (les migrations s'appliquent
+   pendant le build, via `prisma migrate deploy`). Une fois en ligne, ouvrez l'URL du déploiement.
+5. **Générer les données de démonstration** : visitez, dans votre navigateur,
+   `https://votre-projet.vercel.app/api/setup/seed-demo?secret=VOTRE_SEED_SECRET`
+   (la valeur que vous avez mise dans `SEED_SECRET`). La réponse JSON confirme la création et
+   liste les [comptes de démonstration](#comptes-de-démonstration). Cette route refuse de
+   s'exécuter si des données existent déjà (protection anti-écrasement) — ajoutez `&force=true`
+   pour forcer une réinitialisation complète si besoin.
+6. Se connecter avec les comptes de démonstration.
+7. **Rappels automatiques** : un `vercel.json` avec un cron toutes les 30 min vers
    `/api/cron/reminders` est déjà inclus. ⚠️ Le plan Hobby de Vercel limite les crons à une
    exécution par jour — passer en plan Pro pour la fréquence 30 min, ou utiliser un cron externe
    (GitHub Actions, cron-job.org…) appelant cette route avec l'en-tête
