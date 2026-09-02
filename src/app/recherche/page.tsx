@@ -1,13 +1,17 @@
 import Link from "next/link";
+import { addDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { searchAnnuaireSante } from "@/lib/directory";
+import { getAvailableSlots } from "@/lib/scheduling";
 
 export default async function RecherchePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; ville?: string }>;
+  searchParams: Promise<{ q?: string; ville?: string; video?: string; tri?: string }>;
 }) {
-  const { q, ville } = await searchParams;
+  const { q, ville, video, tri } = await searchParams;
+  const videoOnly = video === "1";
+  const sortBy = tri === "note" ? "note" : "creneau";
 
   const practitioners = await prisma.practitioner.findMany({
     where: {
@@ -22,9 +26,38 @@ export default async function RecherchePage({
           }
         : {}),
       ...(ville ? { city: { contains: ville } } : {}),
+      ...(videoOnly ? { motifs: { some: { onlineBookable: true, active: true, type: "VIDEO" } } } : {}),
     },
-    include: { user: true, establishment: true, motifs: { where: { onlineBookable: true, active: true } } },
+    include: {
+      user: true,
+      establishment: true,
+      motifs: { where: { onlineBookable: true, active: true } },
+      avis: { where: { publie: true } },
+    },
     orderBy: { user: { lastName: "asc" } },
+  });
+
+  const from = new Date();
+  const to = addDays(from, 14);
+
+  const enriched = await Promise.all(
+    practitioners.map(async (p) => {
+      const slotsByMotif = await Promise.all(
+        p.motifs.map((m) => getAvailableSlots(p.id, m.id, { from, to, patientView: true })),
+      );
+      const allSlots = slotsByMotif.flat().sort((a, b) => a.start.getTime() - b.start.getTime());
+      const avgNote = p.avis.length > 0 ? p.avis.reduce((s, a) => s + a.note, 0) / p.avis.length : null;
+      return { ...p, nextSlot: allSlots[0]?.start ?? null, avgNote, avisCount: p.avis.length };
+    }),
+  );
+
+  enriched.sort((a, b) => {
+    if (sortBy === "note") {
+      return (b.avgNote ?? -1) - (a.avgNote ?? -1);
+    }
+    if (!a.nextSlot) return 1;
+    if (!b.nextSlot) return -1;
+    return a.nextSlot.getTime() - b.nextSlot.getTime();
   });
 
   const externalResults = q || ville ? await searchAnnuaireSante({ q, city: ville }) : [];
@@ -44,7 +77,7 @@ export default async function RecherchePage({
 
       <section className="mx-auto max-w-5xl px-6 py-8">
         <h1 className="text-2xl font-semibold text-slate-900">Trouver un praticien</h1>
-        <form className="mt-4 flex flex-wrap gap-3 card p-4">
+        <form className="mt-4 flex flex-wrap items-center gap-3 card p-4">
           <input
             name="q"
             defaultValue={q}
@@ -57,16 +90,24 @@ export default async function RecherchePage({
             placeholder="Ville"
             className="flex-1 min-w-[150px] rounded-lg border border-border px-3 py-2"
           />
+          <label className="flex items-center gap-1 text-sm">
+            <input type="checkbox" name="video" value="1" defaultChecked={videoOnly} />
+            Téléconsultation
+          </label>
+          <select name="tri" defaultValue={sortBy} className="rounded-lg border border-border px-2 py-2 text-sm">
+            <option value="creneau">Trier par disponibilité</option>
+            <option value="note">Trier par note</option>
+          </select>
           <button className="rounded-full bg-brand px-5 py-2 font-medium text-white hover:bg-brand-dark">
             Rechercher
           </button>
         </form>
 
         <div className="mt-6 flex flex-col gap-4">
-          {practitioners.length === 0 && (
+          {enriched.length === 0 && (
             <p className="text-slate-600">Aucun praticien ne correspond à votre recherche.</p>
           )}
-          {practitioners.map((p) => (
+          {enriched.map((p) => (
             <Link
               key={p.id}
               href={`/praticien/${p.id}`}
@@ -85,17 +126,36 @@ export default async function RecherchePage({
                   {p.address ? `${p.address}, ` : ""}
                   {p.city}
                 </p>
+                {p.avgNote !== null && (
+                  <p className="text-xs text-warning">
+                    {"★".repeat(Math.round(p.avgNote))}
+                    {"☆".repeat(5 - Math.round(p.avgNote))}{" "}
+                    <span className="text-slate-500">
+                      {p.avgNote.toFixed(1)}/5 ({p.avisCount})
+                    </span>
+                  </p>
+                )}
               </div>
-              <div className="flex flex-wrap gap-1 max-w-[220px] justify-end">
-                {p.motifs.slice(0, 3).map((m) => (
-                  <span
-                    key={m.id}
-                    className="rounded-full px-2 py-0.5 text-xs text-white"
-                    style={{ backgroundColor: m.color }}
-                  >
-                    {m.name}
+              <div className="flex flex-col items-end gap-1">
+                {p.nextSlot ? (
+                  <span className="rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
+                    Prochain RDV : {p.nextSlot.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}{" "}
+                    à {p.nextSlot.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
                   </span>
-                ))}
+                ) : (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">Aucun créneau sous 14 jours</span>
+                )}
+                <div className="flex flex-wrap gap-1 justify-end">
+                  {p.motifs.slice(0, 3).map((m) => (
+                    <span
+                      key={m.id}
+                      className="rounded-full px-2 py-0.5 text-xs text-white"
+                      style={{ backgroundColor: m.color }}
+                    >
+                      {m.name}
+                    </span>
+                  ))}
+                </div>
               </div>
             </Link>
           ))}
