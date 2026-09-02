@@ -79,3 +79,63 @@ export async function sendRelanceAction(devisId: string) {
 
   revalidatePath("/crm");
 }
+
+// ---------------------------------------------------------------------------
+// Pipeline prospects
+// ---------------------------------------------------------------------------
+
+const PROSPECT_STATUT_ORDER = ["NOUVEAU", "CONTACTE", "QUALIFIE", "GAGNE", "PERDU"];
+
+export async function createProspectAction(formData: FormData) {
+  await requireUser(["SECRETARY", "ADMIN"]);
+  const nom = String(formData.get("nom") ?? "").trim();
+  if (!nom) return;
+  await prisma.suiviProspect.create({
+    data: {
+      nom,
+      contactEmail: String(formData.get("contactEmail") ?? "").trim() || null,
+      contactPhone: String(formData.get("contactPhone") ?? "").trim() || null,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+    },
+  });
+  revalidatePath("/crm");
+}
+
+export async function moveProspectStatutAction(prospectId: string, direction: 1 | -1) {
+  await requireUser(["SECRETARY", "ADMIN"]);
+  const prospect = await prisma.suiviProspect.findUniqueOrThrow({ where: { id: prospectId } });
+  const currentIndex = PROSPECT_STATUT_ORDER.indexOf(prospect.statut);
+  const nextIndex = Math.min(Math.max(currentIndex + direction, 0), PROSPECT_STATUT_ORDER.length - 1);
+  await prisma.suiviProspect.update({ where: { id: prospectId }, data: { statut: PROSPECT_STATUT_ORDER[nextIndex] } });
+  revalidatePath("/crm");
+}
+
+// ---------------------------------------------------------------------------
+// Tickets SAV
+// ---------------------------------------------------------------------------
+
+const TICKET_STATUT_ORDER = ["OUVERT", "EN_COURS", "RESOLU"];
+
+export async function createTicketAction(formData: FormData) {
+  await requireUser(["SECRETARY", "ADMIN"]);
+  const titre = String(formData.get("titre") ?? "").trim();
+  if (!titre) return;
+  const priorite = String(formData.get("priorite") ?? "NORMALE");
+  await prisma.ticket.create({
+    data: {
+      titre,
+      description: String(formData.get("description") ?? "").trim() || null,
+      priorite: ["BASSE", "NORMALE", "HAUTE"].includes(priorite) ? priorite : "NORMALE",
+    },
+  });
+  revalidatePath("/crm");
+}
+
+export async function moveTicketStatutAction(ticketId: string, direction: 1 | -1) {
+  await requireUser(["SECRETARY", "ADMIN"]);
+  const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } });
+  const currentIndex = TICKET_STATUT_ORDER.indexOf(ticket.statut);
+  const nextIndex = Math.min(Math.max(currentIndex + direction, 0), TICKET_STATUT_ORDER.length - 1);
+  await prisma.ticket.update({ where: { id: ticketId }, data: { statut: TICKET_STATUT_ORDER[nextIndex] } });
+  revalidatePath("/crm");
+}
