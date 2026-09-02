@@ -11,6 +11,47 @@
   --danger: #d1435b;
   --warning: #c98a1a;
   --success: #1f9d55;
+  --text-strong: #0f172a;
+  --text-muted: #475569;
+  --text-faint: #94a3b8;
+}
+
+/* Mode sombre : activé explicitement via l'attribut data-theme="dark" sur <html>, posé par un
+   script inline (avant hydratation, pour éviter un flash) qui résout la préférence système au
+   premier chargement puis le choix persisté en localStorage ensuite (voir ThemeToggle).
+   Simplification assumée : les couleurs de texte fixes (text-slate-900, etc.) utilisées dans les
+   composants sont repeintes ici globalement plutôt que remplacées par des variantes `dark:`
+   composant par composant — moins pur mais évite une réécriture de chaque page pour ce MVP. */
+:root[data-theme="dark"] {
+  --background: #0f1720;
+  --foreground: #e2e8f0;
+  --brand: #2dd4bf;
+  --brand-dark: #14b8a6;
+  --brand-light: #113b3a;
+  --surface: #1a2530;
+  --border: #2c3947;
+  --text-strong: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+}
+
+:root[data-theme="dark"] .text-slate-900,
+:root[data-theme="dark"] .text-slate-800 {
+  color: var(--text-strong);
+}
+:root[data-theme="dark"] .text-slate-700,
+:root[data-theme="dark"] .text-slate-600 {
+  color: var(--text-muted);
+}
+:root[data-theme="dark"] .text-slate-500,
+:root[data-theme="dark"] .text-slate-400 {
+  color: var(--text-faint);
+}
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea {
+  background: var(--surface);
+  color: var(--foreground);
 }
 
 @theme inline {

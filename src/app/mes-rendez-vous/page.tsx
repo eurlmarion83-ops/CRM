@@ -94,6 +94,13 @@ export default async function MesRendezVousPage() {
             </div>
           ))}
         </div>
+
+        <p className="mt-8 text-xs text-slate-500">
+          <a href="/api/mes-donnees/export" className="text-brand-dark underline">
+            Télécharger mes données
+          </a>{" "}
+          (export RGPD — portabilité de vos rendez-vous, documents et messages).
+        </p>
       </section>
     </main>
   );

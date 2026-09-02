@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/require-user";
 import { signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ROLE_LABELS, type Role } from "@/lib/enums";
 
 const NAV: { href: string; label: string; roles: Role[] }[] = [
@@ -43,6 +44,9 @@ export default async function ProLayout({ children }: { children: React.ReactNod
           ))}
         </nav>
         <div className="mt-auto pt-6 text-xs text-slate-500">
+          <div className="mb-3">
+            <ThemeToggle />
+          </div>
           <p className="font-medium text-slate-700">{user.name}</p>
           <p>{ROLE_LABELS[user.role]}</p>
           <form

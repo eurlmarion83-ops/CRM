@@ -1,0 +1,17 @@
+{
+  "name": "MedCRM — Rendez-vous & téléconsultation",
+  "short_name": "MedCRM",
+  "description": "Prise de rendez-vous médical, téléconsultation et CRM pour professionnels de santé.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f8fa",
+  "theme_color": "#0d7d8c",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
