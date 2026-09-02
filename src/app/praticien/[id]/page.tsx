@@ -46,10 +46,15 @@ export default async function PraticienPage({ params }: { params: Promise<{ id: 
         <div>
           <div className="card p-6">
             <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-light text-xl font-semibold text-brand-dark">
-                {practitioner.user.firstName[0]}
-                {practitioner.user.lastName[0]}
-              </div>
+              {practitioner.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- photo encodée en base64, pas d'optimisation next/image utile
+                <img src={practitioner.photoUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-light text-xl font-semibold text-brand-dark">
+                  {practitioner.user.firstName[0]}
+                  {practitioner.user.lastName[0]}
+                </div>
+              )}
               <div>
                 <h1 className="text-xl font-semibold text-slate-900">
                   {practitioner.user.firstName} {practitioner.user.lastName}

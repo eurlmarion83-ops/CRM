@@ -7,7 +7,7 @@ export function PatientThread() {
   return (
     <MessageThread
       fetchUrl="/api/mes-messages"
-      onSend={(content) => sendPatientMessageAction(content)}
+      onSend={(content, attachment) => sendPatientMessageAction(content, attachment)}
       placeholder="Écrire au cabinet..."
     />
   );

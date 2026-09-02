@@ -27,6 +27,9 @@ export async function GET() {
       createdAt: m.createdAt.toISOString(),
       authorLabel: m.authorType === "PATIENT" ? "Vous" : "Cabinet",
       mine: m.authorType === "PATIENT",
+      attachmentName: m.attachmentName,
+      attachmentType: m.attachmentType,
+      attachmentData: m.attachmentData,
     })),
   });
 }

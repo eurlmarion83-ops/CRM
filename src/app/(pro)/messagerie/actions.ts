@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
+import { assertValidAttachment, ALLOWED_MESSAGE_ATTACHMENT_TYPES, MAX_MESSAGE_ATTACHMENT_BYTES, type AttachmentInput } from "@/lib/attachments";
 
 export async function createConversationAction(formData: FormData) {
   const user = await requireUser(["PRACTITIONER", "SECRETARY", "ADMIN"]);
@@ -26,13 +27,24 @@ export async function createConversationAction(formData: FormData) {
   redirect(`/messagerie/${conversation.id}`);
 }
 
-export async function sendInternalMessageAction(conversationId: string, content: string) {
+export async function sendInternalMessageAction(conversationId: string, content: string, attachment?: AttachmentInput) {
   const user = await requireUser(["PRACTITIONER", "SECRETARY", "ADMIN"]);
   const isMember = await prisma.conversationMember.findUnique({
     where: { conversationId_userId: { conversationId, userId: user.id } },
   });
   if (!isMember) throw new Error("Vous ne faites pas partie de cette conversation.");
 
-  await prisma.messageInterne.create({ data: { conversationId, authorId: user.id, content } });
+  assertValidAttachment(attachment, ALLOWED_MESSAGE_ATTACHMENT_TYPES, MAX_MESSAGE_ATTACHMENT_BYTES);
+
+  await prisma.messageInterne.create({
+    data: {
+      conversationId,
+      authorId: user.id,
+      content,
+      attachmentName: attachment?.name,
+      attachmentType: attachment?.type,
+      attachmentData: attachment?.data,
+    },
+  });
   revalidatePath(`/messagerie/${conversationId}`);
 }

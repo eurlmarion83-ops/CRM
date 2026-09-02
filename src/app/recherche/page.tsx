@@ -113,10 +113,15 @@ export default async function RecherchePage({
               href={`/praticien/${p.id}`}
               className="card flex items-center gap-4 p-4 hover:border-brand"
             >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-light text-lg font-semibold text-brand-dark">
-                {p.user.firstName[0]}
-                {p.user.lastName[0]}
-              </div>
+              {p.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- photo encodée en base64, pas d'optimisation next/image utile
+                <img src={p.photoUrl} alt="" className="h-14 w-14 rounded-full object-cover" />
+              ) : (
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-light text-lg font-semibold text-brand-dark">
+                  {p.user.firstName[0]}
+                  {p.user.lastName[0]}
+                </div>
+              )}
               <div className="flex-1">
                 <p className="font-semibold text-slate-900">
                   {p.user.firstName} {p.user.lastName}

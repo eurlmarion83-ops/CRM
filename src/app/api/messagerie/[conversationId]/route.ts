@@ -26,6 +26,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
       createdAt: m.createdAt.toISOString(),
       authorLabel: `${m.author.firstName} ${m.author.lastName}`,
       mine: m.authorId === session.user.id,
+      attachmentName: m.attachmentName,
+      attachmentType: m.attachmentType,
+      attachmentData: m.attachmentData,
     })),
   });
 }

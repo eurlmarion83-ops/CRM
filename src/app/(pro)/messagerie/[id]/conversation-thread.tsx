@@ -7,7 +7,7 @@ export function ConversationThread({ conversationId }: { conversationId: string 
   return (
     <MessageThread
       fetchUrl={`/api/messagerie/${conversationId}`}
-      onSend={(content) => sendInternalMessageAction(conversationId, content)}
+      onSend={(content, attachment) => sendInternalMessageAction(conversationId, content, attachment)}
     />
   );
 }

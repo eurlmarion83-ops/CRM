@@ -30,6 +30,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       createdAt: m.createdAt.toISOString(),
       authorLabel: m.authorType === "PATIENT" ? "Patient" : m.authorUser ? `${m.authorUser.firstName} ${m.authorUser.lastName}` : "Cabinet",
       mine: m.authorType === "STAFF",
+      attachmentName: m.attachmentName,
+      attachmentType: m.attachmentType,
+      attachmentData: m.attachmentData,
     })),
   });
 }

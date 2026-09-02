@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ALLOWED_MESSAGE_ATTACHMENT_TYPES, MAX_MESSAGE_ATTACHMENT_BYTES } from "@/lib/attachments";
+
+export type MessageAttachment = { name: string; type: string; data: string };
 
 export type ThreadMessage = {
   id: string;
@@ -8,7 +11,30 @@ export type ThreadMessage = {
   createdAt: string;
   authorLabel: string;
   mine: boolean;
+  attachmentName?: string | null;
+  attachmentType?: string | null;
+  attachmentData?: string | null;
 };
+
+function AttachmentBubble({ name, type, data }: { name: string; type: string; data: string }) {
+  if (type.startsWith("image/")) {
+    return (
+      <a href={data} target="_blank" rel="noopener noreferrer" className="mt-1 block">
+        {/* eslint-disable-next-line @next/next/no-img-element -- pièce jointe encodée en base64, pas d'optimisation next/image utile */}
+        <img src={data} alt={name} className="max-h-40 rounded-lg border border-border" />
+      </a>
+    );
+  }
+  return (
+    <a
+      href={data}
+      download={name}
+      className="mt-1 flex items-center gap-1 text-xs underline opacity-90 hover:opacity-100"
+    >
+      📎 {name}
+    </a>
+  );
+}
 
 /**
  * Fil de discussion générique, avec rafraîchissement par sondage (polling) toutes les 3 secondes.
@@ -25,13 +51,16 @@ export function MessageThread({
   placeholder = "Écrire un message...",
 }: {
   fetchUrl: string;
-  onSend: (content: string) => Promise<void>;
+  onSend: (content: string, attachment?: MessageAttachment) => Promise<void>;
   placeholder?: string;
 }) {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [pendingAttachment, setPendingAttachment] = useState<MessageAttachment | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function refresh() {
     const res = await fetch(fetchUrl);
@@ -52,12 +81,35 @@ export function MessageThread({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setAttachmentError(null);
+
+    if (!ALLOWED_MESSAGE_ATTACHMENT_TYPES.includes(file.type)) {
+      setAttachmentError("Type de fichier non autorisé (images ou PDF uniquement).");
+      return;
+    }
+    if (file.size > MAX_MESSAGE_ATTACHMENT_BYTES) {
+      setAttachmentError("Fichier trop volumineux (5 Mo maximum).");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPendingAttachment({ name: file.name, type: file.type, data: String(reader.result) });
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function handleSend() {
-    if (!draft.trim()) return;
+    if (!draft.trim() && !pendingAttachment) return;
     setSending(true);
     try {
-      await onSend(draft.trim());
+      await onSend(draft.trim(), pendingAttachment ?? undefined);
       setDraft("");
+      setPendingAttachment(null);
       await refresh();
     } finally {
       setSending(false);
@@ -76,29 +128,58 @@ export function MessageThread({
               }`}
             >
               {m.content}
+              {m.attachmentData && m.attachmentName && m.attachmentType && (
+                <AttachmentBubble name={m.attachmentName} type={m.attachmentType} data={m.attachmentData} />
+              )}
             </span>
           </div>
         ))}
         {messages.length === 0 && <p className="text-sm text-slate-500">Aucun message pour le moment.</p>}
         <div ref={bottomRef} />
       </div>
-      <div className="flex items-center gap-2 border-t border-border p-3">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSend();
-          }}
-          placeholder={placeholder}
-          className="flex-1 rounded-full border border-border px-4 py-2 text-sm"
-        />
-        <button
-          onClick={handleSend}
-          disabled={sending || !draft.trim()}
-          className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
-        >
-          Envoyer
-        </button>
+      <div className="flex flex-col gap-2 border-t border-border p-3">
+        {attachmentError && <p className="text-xs text-danger">{attachmentError}</p>}
+        {pendingAttachment && (
+          <div className="flex items-center gap-2 text-xs text-slate-600">
+            📎 {pendingAttachment.name}
+            <button onClick={() => setPendingAttachment(null)} className="text-danger underline">
+              Retirer
+            </button>
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ALLOWED_MESSAGE_ATTACHMENT_TYPES.join(",")}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            title="Joindre un fichier"
+            className="shrink-0 rounded-full border border-border px-3 py-2 text-sm hover:bg-brand-light"
+          >
+            📎
+          </button>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSend();
+            }}
+            placeholder={placeholder}
+            className="flex-1 rounded-full border border-border px-4 py-2 text-sm"
+          />
+          <button
+            onClick={handleSend}
+            disabled={sending || (!draft.trim() && !pendingAttachment)}
+            className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            Envoyer
+          </button>
+        </div>
       </div>
     </div>
   );

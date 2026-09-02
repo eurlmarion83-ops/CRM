@@ -51,7 +51,7 @@ export function PatientConversationThread({
       </div>
       <MessageThread
         fetchUrl={`/api/messagerie-patients/${conversationId}`}
-        onSend={(content) => sendStaffMessageAction(conversationId, content)}
+        onSend={(content, attachment) => sendStaffMessageAction(conversationId, content, attachment)}
         placeholder="Répondre au patient..."
       />
     </div>
