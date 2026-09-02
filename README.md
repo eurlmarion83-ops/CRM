@@ -1,10 +1,12 @@
 # MedCRM — Plateforme de rendez-vous médical, téléconsultation & CRM
 
-MVP du **Bloc 1** du cahier des charges : prise de rendez-vous en ligne (patient +
-praticien/secrétariat), téléconsultation vidéo intégrée, rappels SMS/e-mail, et tableau de
-bord d'accueil. L'architecture (modèle de données, structure du projet) est conçue pour
-recevoir les Blocs 2 à 5 (CRM commercial, télé-secrétariat/messagerie, dossier patient,
-logiciel de gestion de cabinet réglementé) en modules successifs.
+Plateforme complète pour cabinets médicaux et télé-secrétariat : prise de rendez-vous en ligne,
+téléconsultation vidéo, CRM commercial, messagerie interne et patient, tâches, documents
+médicaux, paiement en ligne, 2FA. Couvre les Blocs 1 à 4 du cahier des charges avec des
+fonctionnalités réellement implémentées (pas de simples stubs — voir le détail plus bas).
+Le **Bloc 5** (logiciel de gestion de cabinet réglementé : DME, prescription, SESAM-Vitale)
+reste volontairement non démarré : il déclenche des obligations réglementaires fortes (agrément
+CNDA, certification HAS) à cadrer avec un juriste santé numérique avant tout développement.
 
 ## Sommaire
 
@@ -29,8 +31,13 @@ logiciel de gestion de cabinet réglementé) en modules successifs.
 | Style | Tailwind CSS v4 | Rapide à itérer, cohérent, sans dépendance CSS-in-JS. |
 | Téléconsultation | **Jitsi Meet** (External API, embarqué en iframe, WebRTC natif) | Aucune installation côté patient, salle d'attente approximée par la fonctionnalité "Lobby" de Jitsi. ⚠️ `meet.jit.si` (serveur public) est utilisé **uniquement pour la démo** et n'est pas hébergé en France ni certifié HDS : **ne jamais y faire transiter de vraies données de santé**. En production : Jitsi auto-hébergé chez un hébergeur certifié HDS, ou service contractualisé HDS (LiveKit Cloud EU, Daily, Twilio Video…). Voir `src/app/consultation/[room]/jitsi-room.tsx`. |
 | SMS / Email | Abstraction fournisseur (`src/lib/notifications.ts`) : mock console par défaut, adaptateurs **Twilio** (SMS) et **Resend** (email) prêts, activés dès que les clés API sont renseignées dans `.env`. | Pas de blocage pour tester le MVP sans compte payant ; bascule en un fichier `.env` pour la prod. |
-| Rappels | `src/lib/reminders.ts` + route `/api/cron/reminders` (protégée par `CRON_SECRET`) + script `npm run reminders` | Compatible Vercel Cron, cron système, ou tâche planifiée CI. |
+| Rappels | `src/lib/reminders.ts` + route `/api/cron/reminders` (protégée par `CRON_SECRET`) + script `npm run reminders` | Compatible Vercel Cron, cron système, ou tâche planifiée CI. Le même cron déclenche aussi `runStaleDevisTaskSweep()` (tâches de relance auto-générées). |
 | Calendrier patient | Génération `.ics` (paquet `ics`) | Ajout direct à Google/Apple/Outlook Calendar sans dépendance externe. |
+| Documents / factures | PDF générés à la volée (`pdf-lib`), pas de blob stocké | Le contenu structuré vit en base, le rendu PDF est recalculé à chaque téléchargement — compatible hébergement serverless sans stockage fichier persistant. |
+| Paiement en ligne | Abstraction `src/lib/payments.ts` : mock (`/paiement/mock/[id]`) par défaut, Stripe Checkout réel si `STRIPE_SECRET_KEY` configurée | Même pattern que SMS/email : testable sans compte payant. |
+| 2FA | TOTP standard (`otpauth` + QR via `qrcode`), compatible Google Authenticator/Authy | Pas de dépendance à un service tiers. |
+| Messagerie interne/patient | Sondage (polling) toutes les 3s, pas de WebSocket | Les fonctions serverless Vercel ne tiennent pas de connexion persistante ; documenté comme choix MVP, Pusher/Ably en upgrade path si un vrai push est nécessaire. |
+| Tests | Vitest, intégration contre une vraie base Postgres | Voir §Tests plus bas. |
 
 ## Démarrage rapide
 
@@ -74,37 +81,63 @@ Mot de passe commun : `Demo1234!` (défini dans `prisma/seed.ts`).
 Côté patient : créez un compte via `/inscription`, ou réservez directement en invité depuis
 `/recherche` → fiche praticien (aucun compte requis).
 
-## Fonctionnalités livrées (Bloc 1)
+## Fonctionnalités livrées
 
-**Côté patient** (`/recherche`, `/praticien/[id]`, `/mes-rendez-vous`, `/confirmation/[id]`)
+### Bloc 1 — Rendez-vous & téléconsultation
+
+**Côté patient** (`/recherche`, `/praticien/[id]`, `/mes-rendez-vous`, `/confirmation/[id]`,
+`/mes-messages`)
 - Recherche par spécialité / nom / ville, fiche praticien (tarifs, adresse, moyens de paiement).
 - Réservation en ligne : choix du motif → créneaux disponibles en temps réel → coordonnées →
-  confirmation immédiate, en 3 étapes.
-- Réservation possible sans compte (invité) via lien sécurisé, ou avec compte patient.
-- Ajout au calendrier (`.ics`), annulation en ligne dans le délai paramétré par le praticien
-  (`cancellationDeadlineH`).
+  confirmation immédiate, en 3 étapes. Sans compte (invité, lien sécurisé) ou avec compte patient.
+- Ajout au calendrier (`.ics`), annulation en ligne dans le délai paramétré par le praticien.
 - Salle d'attente vidéo accessible 10 min avant l'heure du RDV pour les motifs "téléconsultation".
+- Paiement en ligne de la téléconsultation quand le motif a un prix configuré.
+- Messagerie sécurisée avec le cabinet ; export RGPD de ses propres données (`/mes-rendez-vous`).
 
 **Côté praticien / secrétariat / admin** (`/tableau-de-bord`, `/agenda`, `/motifs`,
 `/disponibilites`, `/patients`)
-- Agenda partagé multi-praticiens : vues **Liste / Jour / Semaine / Mois**, mini-calendrier,
-  sélecteur d'agendas avec couleur par praticien, ligne d'heure courante, impression du planning
-  (`window.print`, mise en page à adapter selon l'imprimante cible).
-- Création de RDV par clic sur un créneau (recherche ou création de patient), report (nouvelle
-  date/heure), annulation, marquage "no-show".
-- **« Trouver un créneau »** : assistant multi-critères (praticien(s), type de consultation,
-  jours/horaires acceptés) → liste des prochains créneaux libres, y compris tous-praticiens-confondus.
-- **Motifs de consultation** personnalisables par praticien : couleur, durée, type
-  (cabinet / domicile / vidéo), réservable en ligne ou usage interne uniquement (masqué côté
-  patient par défaut), duplication vers un confrère.
-- **Disponibilités** : plages hebdomadaires récurrentes avec granularité de créneau, visibilité
-  publique ou interne (secrétariat/téléphone uniquement), restriction à certains motifs, congés.
-- Téléconsultation : le praticien active le "Lobby" Jitsi à l'entrée, admet le patient depuis la
-  salle d'attente virtuelle ; micro/caméra, partage d'écran, chat intégrés (Jitsi).
-- Rappels SMS/e-mail automatiques (confirmation, J-1, H-1, annulation), quota SMS/signatures
-  visible sur le tableau de bord.
-- Tableau de bord "Bonjour {prénom}" : RDV aujourd'hui/demain, quotas SMS/signatures, graphique
-  CA mensuel, jauge d'objectif, aperçu des devis (CRM Bloc 2).
+- Agenda partagé multi-praticiens : vues **Liste / Jour / Semaine / Mois** (la vue Semaine croise
+  vraiment jour × praticien, pas un focus mono-praticien), mini-calendrier, sélecteur d'agendas
+  coloré, ligne d'heure courante, **glisser-déposer** pour reprogrammer un RDV, impression du
+  planning (`window.print`).
+- **« Trouver un créneau »** : assistant multi-critères → liste des prochains créneaux libres,
+  tous praticiens confondus.
+- **Motifs** personnalisables par praticien : couleur, durée, type (cabinet/domicile/vidéo),
+  réservable en ligne ou usage interne, prix optionnel, duplication vers un confrère.
+- **Disponibilités** : plages hebdomadaires récurrentes, visibilité publique/interne, restriction
+  par motif, congés.
+- Téléconsultation : "Lobby" Jitsi comme salle d'attente virtuelle, micro/caméra/partage
+  d'écran/chat intégrés.
+- Rappels SMS/e-mail automatiques, quota SMS/signatures.
+- Tableau de bord : RDV du jour/demain, CA mensuel, objectif, **taux de remplissage et de
+  no-show par praticien**, aperçu CRM, messagerie patients en attente.
+
+### Bloc 2 — CRM commercial (`/crm`)
+- Pipeline de devis en colonnes (Brouillon → Envoyé → Signé → Expiré).
+- Transformation d'un devis signé en facture (numérotée), export PDF de la facture.
+- Relance manuelle (email + journalisation) et relance **automatique** : une tâche est créée
+  quand un devis envoyé reste sans réponse au-delà d'un délai (via le cron des rappels).
+
+### Bloc 3 — Télé-secrétariat & communication (`/taches`, `/messagerie`, `/messagerie-patients`)
+- **Tâches** : création/assignation/échéance/priorité, vues "mes tâches"/"équipe", badge de
+  compteur ; auto-générées sur no-show et devis non relancés.
+- **Messagerie interne** (secrétaires ↔ praticiens) : conversations 1-1 et groupes.
+- **Messagerie patients** : fil sécurisé par patient, assignation à un praticien, statut
+  à traiter/traité.
+- Les deux messageries utilisent un sondage (polling) 3s plutôt qu'un vrai push — voir tableau
+  stack ci-dessus.
+
+### Bloc 4 — Dossier patient & documents (`/patients/[id]`)
+- Fiche patient : historique des RDV, documents, fusion de doublons.
+- Génération de documents médicaux (ordonnance, certificat, compte rendu) en PDF à la demande.
+- Paiement en ligne (voir Bloc 1) et export RGPD (portabilité des données patient).
+
+### Sécurité & qualité
+- 2FA (TOTP) optionnelle pour les comptes professionnels (`/parametres/securite`).
+- Journal d'activité consultable par l'admin (`/admin/journal`).
+- PWA installable (manifest + service worker), mode sombre.
+- Tests Vitest + CI GitHub Actions (voir §Tests).
 
 ## Simplifications assumées du MVP
 
@@ -113,18 +146,19 @@ Documentées ici pour transparence — à traiter avant une mise en production r
 - **Fuseau horaire** : les horaires sont traités en heure serveur/navigateur, sans gestion
   explicite de fuseau (`Europe/Paris` implicite). À industrialiser avec `date-fns-tz`/Luxon et
   un fuseau par établissement si multi-régions.
-- **Semaine multi-praticiens** : la vue Semaine se concentre sur un seul praticien à la fois
-  (comparaison multi-praticiens disponible en vue Jour, colonnes côte à côte). La vue Mois agrège
-  tous les praticiens sélectionnés.
-- **Drag & drop** : le déplacement de RDV se fait via un formulaire (nouvelle date/heure) plutôt
-  que par glisser-déposer visuel — même résultat fonctionnel, ergonomie à raffiner.
 - **Impression du planning mensuel** : utilise l'impression navigateur (`window.print()`) plutôt
   qu'une génération PDF serveur dédiée.
 - **Salle d'attente vidéo** : approximée par le "Lobby" Jitsi (premier arrivé = modérateur sans
   authentification). Fiable pour une démo, à sécuriser avec JaaS/JWT ou un self-host authentifié
   en production (voir tableau ci-dessus).
 - **Dédoublonnage patients invités** : une réservation invité recherche un patient existant par
-  email exact ; pas de fusion de doublons avancée (prévue en Bloc 4).
+  email exact ; la fusion manuelle de doublons existe (`/patients/[id]`) mais n'est pas
+  automatique/suggérée.
+- **Messagerie temps réel** : sondage 3s plutôt que WebSocket/push (voir tableau stack).
+- **Taux de remplissage** (tableau de bord) : dérivé des plages hebdomadaires récurrentes sans
+  soustraire les congés ponctuels — une tendance, pas un chiffre de facturation.
+- **Mode sombre** : les couleurs de texte Tailwind fixes (`text-slate-900`, etc.) sont repeintes
+  globalement en CSS plutôt que converties en variantes `dark:` par composant.
 
 ## Annuaire national des professionnels de santé — pourquoi il n'y a pas "tous les médecins de France"
 
@@ -144,23 +178,19 @@ connues. Pour activer une vraie recherche nationale, il faut s'inscrire comme d�
 esante.gouv.fr et implémenter l'appel FHIR dans `searchAnnuaireSante()` (non vérifié en ligne
 lors de l'écriture de ce document — revalider le format d'API actuel).
 
-## Architecture & roadmap Blocs 2-5
+## Architecture & roadmap
 
-Le schéma Prisma (`prisma/schema.prisma`) inclut déjà des modèles "stub" pour les blocs suivants,
-afin que l'extension se fasse par ajout de code plutôt que par refonte :
+Les Blocs 1 à 4 sont implémentés avec de vraies fonctionnalités (voir section précédente), pas
+de simples modèles vides. Ce qui reste explicitement hors périmètre :
 
-- **Bloc 2 (CRM commercial)** : modèle `Devis` présent (aperçu affiché sur le tableau de bord) ;
-  restent à livrer : factures, signature électronique, pipeline prospects, workflows de relance,
-  tickets SAV.
-- **Bloc 3 (télé-secrétariat & communication)** : modèles `Conversation` / `MessageInterne`
-  (messagerie interne temps réel) et `ConversationPatient` (messagerie patient sécurisée) + `Tache`
-  déjà dans le schéma ; l'implémentation temps réel nécessitera un canal WebSocket (Socket.IO,
-  Ably, Pusher…) non inclus dans ce MVP HTTP/Server Actions.
-- **Bloc 4 (dossier patient & documents)** : la fiche patient actuelle est minimale
-  (coordonnées + historique RDV) ; restent à livrer génération de documents, paiement en ligne,
-  export/portabilité RGPD.
-- **Bloc 5 (LGC réglementé type Weda)** : **non démarré intentionnellement** — ce bloc déclenche
-  des obligations réglementaires fortes (voir section suivante) à cadrer avec un juriste santé
+- **Signature électronique** réelle (le compteur "signatures restantes" existe dans `Quota`,
+  mais aucun fournisseur — Yousign, DocuSign — n'est branché).
+- **Pipeline prospects / leads** en amont du devis (le CRM démarre au devis).
+- **Tickets SAV / support**.
+- **Vraie messagerie temps réel** (WebSocket/push) à la place du polling actuel.
+- **Bloc 5 (LGC réglementé type Weda)** : **non démarré intentionnellement** — dossier médical
+  électronique, prescription assistée (LAP), facturation SESAM-Vitale. Ce bloc déclenche des
+  obligations réglementaires fortes (voir section suivante) à cadrer avec un juriste santé
   numérique avant tout développement.
 
 ## Conformité santé — points à trancher avant mise en production
@@ -182,8 +212,8 @@ avec de vraies données de santé.
   facturation Assurance Maladie nécessite l'agrément CNDA (SESAM-Vitale), la certification HAS du
   LAP, et potentiellement un marquage CE (dispositif médical). À ne pas développer sans
   accompagnement réglementaire dédié.
-- **2FA** : non implémentée dans ce MVP (NextAuth Credentials simple) ; à ajouter pour les comptes
-  professionnels avant mise en production (données de santé).
+- **2FA** : disponible (TOTP), mais optionnelle — la rendre obligatoire pour les comptes
+  professionnels avant mise en production avec de vraies données de santé.
 
 ## Déploiement
 
