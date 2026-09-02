@@ -1,18 +1,24 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/require-user";
 import { signOut } from "@/auth";
-import { ROLE_LABELS } from "@/lib/enums";
+import { prisma } from "@/lib/prisma";
+import { ROLE_LABELS, type Role } from "@/lib/enums";
 
-const NAV = [
-  { href: "/tableau-de-bord", label: "Tableau de bord" },
-  { href: "/agenda", label: "Agenda" },
-  { href: "/motifs", label: "Motifs" },
-  { href: "/disponibilites", label: "Disponibilités" },
-  { href: "/patients", label: "Patients" },
+const NAV: { href: string; label: string; roles: Role[] }[] = [
+  { href: "/tableau-de-bord", label: "Tableau de bord", roles: ["PRACTITIONER", "SECRETARY", "ADMIN"] },
+  { href: "/agenda", label: "Agenda", roles: ["PRACTITIONER", "SECRETARY", "ADMIN"] },
+  { href: "/motifs", label: "Motifs", roles: ["PRACTITIONER", "SECRETARY", "ADMIN"] },
+  { href: "/disponibilites", label: "Disponibilités", roles: ["PRACTITIONER", "SECRETARY", "ADMIN"] },
+  { href: "/patients", label: "Patients", roles: ["PRACTITIONER", "SECRETARY", "ADMIN"] },
+  { href: "/taches", label: "Tâches", roles: ["PRACTITIONER", "SECRETARY", "ADMIN"] },
+  { href: "/messagerie", label: "Messagerie", roles: ["PRACTITIONER", "SECRETARY", "ADMIN"] },
+  { href: "/crm", label: "CRM commercial", roles: ["SECRETARY", "ADMIN"] },
+  { href: "/admin/journal", label: "Journal d'activité", roles: ["ADMIN"] },
 ];
 
 export default async function ProLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser(["PRACTITIONER", "SECRETARY", "ADMIN"]);
+  const pendingTaskCount = await prisma.tache.count({ where: { assigneId: user.id, statut: { not: "FAIT" } } });
 
   return (
     <div className="flex min-h-full flex-1">
@@ -21,13 +27,16 @@ export default async function ProLayout({ children }: { children: React.ReactNod
           MedCRM
         </Link>
         <nav className="flex flex-col gap-1 text-sm">
-          {NAV.map((item) => (
+          {NAV.filter((item) => item.roles.includes(user.role)).map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-lg px-3 py-2 hover:bg-brand-light hover:text-brand-dark"
+              className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-brand-light hover:text-brand-dark"
             >
               {item.label}
+              {item.href === "/taches" && pendingTaskCount > 0 && (
+                <span className="rounded-full bg-brand px-2 py-0.5 text-xs text-white">{pendingTaskCount}</span>
+              )}
             </Link>
           ))}
         </nav>

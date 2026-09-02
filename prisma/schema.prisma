@@ -17,15 +17,17 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  role         String // PATIENT | PRACTITIONER | SECRETARY | ADMIN
-  firstName    String
-  lastName     String
-  phone        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String
+  role             String // PATIENT | PRACTITIONER | SECRETARY | ADMIN
+  firstName        String
+  lastName         String
+  phone            String?
+  twoFactorSecret  String? // secret TOTP (chiffré au niveau applicatif recommandé en prod)
+  twoFactorEnabled Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   practitioner        Practitioner?
   secretaryProfile    SecretaryProfile?
@@ -34,6 +36,8 @@ model User {
   tasksAssigned       Tache[]              @relation("TacheAssignee")
   internalMessages    MessageInterne[]
   conversationMembers ConversationMember[]
+  documentsCreated    DocumentMedical[]
+  messagesPatient     MessagePatient[]
 }
 
 model Establishment {
@@ -52,26 +56,28 @@ model Establishment {
 }
 
 model Practitioner {
-  id                     String  @id @default(cuid())
-  userId                 String  @unique
-  user                   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  establishmentId        String?
-  establishment          Establishment? @relation(fields: [establishmentId], references: [id])
-  specialty              String
-  bio                    String?
-  address                String?
-  city                   String?
-  photoUrl               String?
-  color                  String  @default("#2563eb") // couleur agenda
-  paymentMethods         String? // CSV libre : "CB,Chèque,Espèces"
-  acceptsOnlineBooking   Boolean @default(true)
-  cancellationDeadlineH  Int     @default(24) // délai d'annulation en heures
+  id                    String         @id @default(cuid())
+  userId                String         @unique
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  establishmentId       String?
+  establishment         Establishment? @relation(fields: [establishmentId], references: [id])
+  specialty             String
+  bio                   String?
+  address               String?
+  city                  String?
+  photoUrl              String?
+  color                 String         @default("#2563eb") // couleur agenda
+  paymentMethods        String? // CSV libre : "CB,Chèque,Espèces"
+  acceptsOnlineBooking  Boolean        @default(true)
+  cancellationDeadlineH Int            @default(24) // délai d'annulation en heures
 
-  motifs         Motif[]
-  availabilities Availability[]
-  timeOffs       TimeOff[]
-  appointments   RendezVous[]
-  secretaries    SecretaryAssignment[]
+  motifs               Motif[]
+  availabilities       Availability[]
+  timeOffs             TimeOff[]
+  appointments         RendezVous[]
+  secretaries          SecretaryAssignment[]
+  documents            DocumentMedical[]
+  conversationsPatient ConversationPatient[]
 
   createdAt DateTime @default(now())
 }
@@ -82,7 +88,7 @@ model SecretaryProfile {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   practitioners SecretaryAssignment[]
-  createdAt     DateTime               @default(now())
+  createdAt     DateTime              @default(now())
 }
 
 model SecretaryAssignment {
@@ -108,8 +114,9 @@ model Patient {
   city      String?
   notes     String?
 
-  appointments        RendezVous[]
+  appointments         RendezVous[]
   conversationsPatient ConversationPatient[]
+  documents            DocumentMedical[]
 
   createdAt DateTime @default(now())
 }
@@ -130,7 +137,7 @@ model Motif {
   active         Boolean      @default(true)
   sortOrder      Int          @default(0)
 
-  appointments RendezVous[]
+  appointments     RendezVous[]
   slotRestrictions AvailabilityMotif[]
 
   createdAt DateTime @default(now())
@@ -142,14 +149,14 @@ model Motif {
 
 // Plage récurrente hebdomadaire définissant les créneaux ouverts d'un praticien
 model Availability {
-  id             String       @id @default(cuid())
-  practitionerId String
-  practitioner   Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
-  dayOfWeek      Int // 0 = dimanche ... 6 = samedi
-  startTime      String // "HH:mm"
-  endTime        String // "HH:mm"
-  slotDurationMin Int         @default(30)
-  visibility     String       @default("PUBLIC") // PUBLIC (patient + secrétariat) | INTERNAL (secrétariat/praticien uniquement)
+  id              String       @id @default(cuid())
+  practitionerId  String
+  practitioner    Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  dayOfWeek       Int // 0 = dimanche ... 6 = samedi
+  startTime       String // "HH:mm"
+  endTime         String // "HH:mm"
+  slotDurationMin Int          @default(30)
+  visibility      String       @default("PUBLIC") // PUBLIC (patient + secrétariat) | INTERNAL (secrétariat/praticien uniquement)
 
   restrictedMotifs AvailabilityMotif[] // si vide => tous les motifs réservables du praticien sont acceptés
 
@@ -184,13 +191,13 @@ model TimeOff {
 // ---------------------------------------------------------------------------
 
 model RendezVous {
-  id              String        @id @default(cuid())
+  id              String         @id @default(cuid())
   practitionerId  String
-  practitioner    Practitioner  @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  practitioner    Practitioner   @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
   patientId       String
-  patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient         Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
   motifId         String
-  motif           Motif         @relation(fields: [motifId], references: [id])
+  motif           Motif          @relation(fields: [motifId], references: [id])
   establishmentId String?
   establishment   Establishment? @relation(fields: [establishmentId], references: [id])
 
@@ -199,29 +206,31 @@ model RendezVous {
   status String   @default("CONFIRMED") // CONFIRMED | CANCELLED | COMPLETED | NO_SHOW
   notes  String?
 
-  createdById String? // user ayant créé le RDV (patient, secrétaire ou praticien)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  cancelledAt DateTime?
+  createdById  String? // user ayant créé le RDV (patient, secrétaire ou praticien)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  cancelledAt  DateTime?
   cancelReason String?
 
   teleconsultation Teleconsultation?
   reminders        ReminderLog[]
   tasks            Tache[]
+  documents        DocumentMedical[]
+  payment          Payment?
 
   @@index([practitionerId, start])
   @@index([patientId])
 }
 
 model Teleconsultation {
-  id            String     @id @default(cuid())
-  appointmentId String     @unique
-  appointment   RendezVous @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  roomName      String     @unique
-  status        String     @default("SCHEDULED") // SCHEDULED | WAITING_ROOM | ACTIVE | ENDED
-  patientJoinedAt    DateTime?
+  id                   String     @id @default(cuid())
+  appointmentId        String     @unique
+  appointment          RendezVous @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  roomName             String     @unique
+  status               String     @default("SCHEDULED") // SCHEDULED | WAITING_ROOM | ACTIVE | ENDED
+  patientJoinedAt      DateTime?
   practitionerJoinedAt DateTime?
-  endedAt       DateTime?
+  endedAt              DateTime?
 
   createdAt DateTime @default(now())
 }
@@ -236,14 +245,52 @@ model ReminderLog {
   sentAt        DateTime   @default(now())
 }
 
+// ---------------------------------------------------------------------------
+// Documents médicaux (Bloc 4) — générés à la volée en PDF, contenu structuré stocké ici
+// (pas de blob binaire : compatible hébergement serverless sans stockage fichier persistant)
+// ---------------------------------------------------------------------------
+
+model DocumentMedical {
+  id             String       @id @default(cuid())
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointmentId  String?
+  appointment    RendezVous?  @relation(fields: [appointmentId], references: [id])
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
+  authorId       String?
+  author         User?        @relation(fields: [authorId], references: [id])
+  type           String // ORDONNANCE | CERTIFICAT | COMPTE_RENDU
+  title          String
+  content        String
+
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Paiement en ligne (téléconsultation) — abstraction pluggable, cf. src/lib/payments.ts
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id            String     @id @default(cuid())
+  appointmentId String     @unique
+  appointment   RendezVous @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  amountCents   Int
+  status        String     @default("PENDING") // PENDING | PAID | FAILED | REFUNDED
+  provider      String     @default("MOCK") // MOCK | STRIPE
+  providerRef   String? // ex : Stripe Checkout Session id
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
 // Quotas SMS / signatures électroniques (facturables), par établissement
 model Quota {
-  id              String        @id @default(cuid())
-  establishmentId String        @unique
-  establishment   Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
-  smsRemaining    Int           @default(100)
-  signaturesRemaining Int       @default(20)
-  updatedAt       DateTime      @updatedAt
+  id                  String        @id @default(cuid())
+  establishmentId     String        @unique
+  establishment       Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  smsRemaining        Int           @default(100)
+  signaturesRemaining Int           @default(20)
+  updatedAt           DateTime      @updatedAt
 }
 
 model JournalActivite {
@@ -258,32 +305,53 @@ model JournalActivite {
 }
 
 // ---------------------------------------------------------------------------
-// Stubs d'extensibilité — Bloc 2 (CRM), Bloc 3 (télé-secrétariat / messagerie / tâches)
-// Modèles présents dans le schéma pour préparer l'architecture (cf. README §Roadmap),
-// UI non livrée dans ce MVP.
+// Bloc 2 — CRM commercial (devis, factures, relances)
 // ---------------------------------------------------------------------------
 
 model Devis {
-  id          String   @id @default(cuid())
-  clientNom   String
-  objet       String
-  montant     Float
-  statut      String   @default("BROUILLON") // BROUILLON | ENVOYE | SIGNE | EXPIRE
-  dateCreation DateTime @default(now())
-  dateRelance DateTime?
+  id           String    @id @default(cuid())
+  clientNom    String
+  contactEmail String?
+  objet        String
+  montant      Float
+  statut       String    @default("BROUILLON") // BROUILLON | ENVOYE | SIGNE | EXPIRE
+  dateCreation DateTime  @default(now())
+  dateRelance  DateTime?
+  relances     Relance[]
+  facture      Facture?
+}
+
+model Facture {
+  id           String    @id @default(cuid())
+  devisId      String?   @unique
+  devis        Devis?    @relation(fields: [devisId], references: [id])
+  numero       String    @unique
+  clientNom    String
+  montant      Float
+  statut       String    @default("EMISE") // EMISE | PAYEE | IMPAYEE | ANNULEE
+  dateEmission DateTime  @default(now())
+  dateEcheance DateTime?
+}
+
+model Relance {
+  id        String   @id @default(cuid())
+  devisId   String
+  devis     Devis    @relation(fields: [devisId], references: [id], onDelete: Cascade)
+  message   String
+  createdAt DateTime @default(now())
 }
 
 model Tache {
-  id          String     @id @default(cuid())
-  titre       String
-  description String?
-  echeance    DateTime?
-  priorite    String     @default("NORMALE") // BASSE | NORMALE | HAUTE
-  statut      String     @default("A_FAIRE") // A_FAIRE | EN_COURS | FAIT
-  assigneId   String?
-  assigne     User?      @relation("TacheAssignee", fields: [assigneId], references: [id])
+  id            String      @id @default(cuid())
+  titre         String
+  description   String?
+  echeance      DateTime?
+  priorite      String      @default("NORMALE") // BASSE | NORMALE | HAUTE
+  statut        String      @default("A_FAIRE") // A_FAIRE | EN_COURS | FAIT
+  assigneId     String?
+  assigne       User?       @relation("TacheAssignee", fields: [assigneId], references: [id])
   appointmentId String?
-  appointment RendezVous? @relation(fields: [appointmentId], references: [id])
+  appointment   RendezVous? @relation(fields: [appointmentId], references: [id])
 
   createdAt DateTime @default(now())
 }
@@ -318,9 +386,23 @@ model MessageInterne {
 }
 
 model ConversationPatient {
-  id         String   @id @default(cuid())
-  patientId  String
-  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  statut     String   @default("A_TRAITER") // A_TRAITER | TRAITE
-  createdAt  DateTime @default(now())
+  id                     String           @id @default(cuid())
+  patientId              String
+  patient                Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  assignedPractitionerId String?
+  assignedPractitioner   Practitioner?    @relation(fields: [assignedPractitionerId], references: [id])
+  statut                 String           @default("A_TRAITER") // A_TRAITER | TRAITE
+  messages               MessagePatient[]
+  createdAt              DateTime         @default(now())
+}
+
+model MessagePatient {
+  id                    String              @id @default(cuid())
+  conversationPatientId String
+  conversationPatient   ConversationPatient @relation(fields: [conversationPatientId], references: [id], onDelete: Cascade)
+  authorType            String // PATIENT | STAFF
+  authorUserId          String?
+  authorUser            User?               @relation(fields: [authorUserId], references: [id])
+  content               String
+  createdAt             DateTime            @default(now())
 }

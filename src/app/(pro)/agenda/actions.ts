@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
 import { bookAppointment } from "@/lib/scheduling";
 import { notifyAppointment } from "@/lib/notifications";
+import { createNoShowTask } from "@/lib/task-automation";
 
 export type AgendaActionState = { error?: string; success?: boolean } | undefined;
 
@@ -85,7 +86,11 @@ export async function cancelAppointmentStaffAction(appointmentId: string, reason
   await prisma.journalActivite.create({
     data: { userId: user.id, action: reason === "NO_SHOW" ? "RENDEZVOUS_NOSHOW" : "RENDEZVOUS_ANNULE", entityType: "RendezVous", entityId: appointmentId },
   });
+  if (reason === "NO_SHOW") {
+    await createNoShowTask(appointmentId);
+  }
   revalidatePath("/agenda");
+  revalidatePath("/taches");
 }
 
 export async function rescheduleAppointmentAction(appointmentId: string, newStartIso: string) {

@@ -63,6 +63,11 @@ function getEmailProvider(): EmailProvider {
   return process.env.RESEND_API_KEY ? new ResendEmailProvider() : new ConsoleEmailProvider();
 }
 
+/** Envoi d'email générique (hors contexte RDV, ex. relance de devis) — pas de journalisation ReminderLog. */
+export async function sendEmail(to: string, subject: string, body: string) {
+  await getEmailProvider().send(to, subject, body);
+}
+
 export async function notifyAppointment(params: {
   appointmentId: string;
   kind: ReminderKind;

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
 import { createPatientAction } from "./actions";
@@ -56,7 +57,9 @@ export default async function PatientsPage({
           {patients.map((p) => (
             <tr key={p.id} className="border-t border-border">
               <td className="py-2">
-                {p.firstName} {p.lastName}
+                <Link href={`/patients/${p.id}`} className="text-brand-dark hover:underline">
+                  {p.firstName} {p.lastName}
+                </Link>
               </td>
               <td className="py-2">{p.phone ?? "—"}</td>
               <td className="py-2">{p.email ?? "—"}</td>
