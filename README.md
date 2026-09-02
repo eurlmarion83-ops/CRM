@@ -50,6 +50,15 @@ npm run dev                # http://localhost:3000
 
 Pour tester les rappels automatiques manuellement : `npm run reminders`.
 
+### Tests
+
+`npm run test` (Vitest) : tests unitaires (jetons d'accès invité) et d'intégration (moteur de
+créneaux — `src/lib/scheduling.ts`) exécutés contre une vraie base Postgres plutôt qu'un mock du
+client Prisma (le comportement des requêtes imbriquées/transactions serait fastidieux et fragile
+à mocker fidèlement). Les données de test sont préfixées `TEST_` et nettoyées après coup. La CI
+GitHub Actions (`.github/workflows/ci.yml`) lance lint + build (qui applique les migrations) +
+tests sur chaque push, avec un conteneur Postgres de service.
+
 ## Comptes de démonstration
 
 Mot de passe commun : `Demo1234!` (défini dans `prisma/seed.ts`).

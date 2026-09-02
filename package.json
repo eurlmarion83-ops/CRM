@@ -10,7 +10,8 @@
     "lint": "eslint",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "reminders": "tsx scripts/send-reminders.ts"
+    "reminders": "tsx scripts/send-reminders.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.0",
