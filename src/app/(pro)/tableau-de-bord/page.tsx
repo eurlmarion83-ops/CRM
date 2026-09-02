@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { requireUser } from "@/lib/require-user";
 import { getVisiblePractitioners } from "@/lib/agenda-data";
+import { getPractitionerPerformance } from "@/lib/analytics";
 import { RevenueChart } from "./revenue-chart";
 
 type AppointmentWithRelations = Prisma.RendezVousGetPayload<{
@@ -22,7 +23,7 @@ export default async function TableauDeBordPage() {
   const tomorrowStart = startOfDay(addDays(today, 1));
   const tomorrowEnd = endOfDay(addDays(today, 1));
 
-  const [rdvToday, rdvTomorrow, quota, devisRecents] = await Promise.all([
+  const [rdvToday, rdvTomorrow, quota, devisRecents, performance, unreadPatientConversations] = await Promise.all([
     prisma.rendezVous.findMany({
       where: { practitionerId: { in: practitionerIds }, start: { gte: todayStart, lte: todayEnd }, status: "CONFIRMED" },
       include: { patient: true, practitioner: { include: { user: true } }, motif: true },
@@ -37,6 +38,8 @@ export default async function TableauDeBordPage() {
       ? prisma.quota.findUnique({ where: { establishmentId: practitioners[0].establishmentId } })
       : null,
     prisma.devis.findMany({ orderBy: { dateCreation: "desc" }, take: 5 }),
+    getPractitionerPerformance(practitionerIds, 30),
+    prisma.conversationPatient.count({ where: { statut: "A_TRAITER" } }),
   ]);
 
   // CA mensuel (Bloc 2 en construction) : agrégation des devis signés des 6 derniers mois, à titre d'aperçu.
@@ -71,10 +74,15 @@ export default async function TableauDeBordPage() {
 
         <div className="flex flex-col gap-4">
           <div className="card p-5">
-            <h2 className="font-semibold text-slate-900">Derniers messages</h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Messagerie interne et patients — module Bloc 3 (à venir).
+            <h2 className="font-semibold text-slate-900">Messagerie patients</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              {unreadPatientConversations > 0
+                ? `${unreadPatientConversations} conversation(s) à traiter`
+                : "Aucune conversation en attente"}
             </p>
+            <Link href="/messagerie-patients" className="mt-2 inline-block text-xs text-brand-dark underline">
+              Voir la messagerie →
+            </Link>
           </div>
           <div className="card p-5">
             <h2 className="text-sm font-medium text-slate-600">SMS restants</h2>
@@ -117,6 +125,33 @@ export default async function TableauDeBordPage() {
           <p className="mt-2 text-xs text-slate-500">Objectif : {objectifMensuel.toLocaleString("fr-FR")} €</p>
         </div>
       </div>
+
+      {performance.length > 0 && (
+        <div className="mt-4 card p-5">
+          <h2 className="font-semibold text-slate-900">Performance (30 derniers jours)</h2>
+          <p className="text-xs text-slate-500">
+            Taux de remplissage estimé à partir des plages hebdomadaires déclarées (hors congés
+            ponctuels) ; taux de no-show sur les RDV échus.
+          </p>
+          <div className="mt-3 flex flex-col gap-3">
+            {performance.map((p) => (
+              <div key={p.practitionerId}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium" style={{ color: p.color }}>
+                    {p.name}
+                  </span>
+                  <span className="text-slate-500">
+                    Remplissage {p.fillRatePct}% · No-show {p.noShowRatePct}% ({p.totalAppointments} RDV)
+                  </span>
+                </div>
+                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-brand-light">
+                  <div className="h-full rounded-full" style={{ width: `${p.fillRatePct}%`, backgroundColor: p.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 card p-5">
         <h2 className="font-semibold text-slate-900">Devis récents (aperçu CRM — Bloc 2)</h2>
