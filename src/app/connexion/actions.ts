@@ -2,7 +2,8 @@
 
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
-import { signIn, auth } from "@/auth";
+import { signIn } from "@/auth";
+import { prisma } from "@/lib/prisma";
 
 export type LoginState = { error?: string } | undefined;
 
@@ -20,7 +21,9 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     throw err;
   }
 
-  const session = await auth();
-  const role = session?.user.role;
-  redirect(role === "PATIENT" ? "/mes-rendez-vous" : "/tableau-de-bord");
+  // On ne relit pas la session via auth() ici : le cookie tout juste posé par signIn()
+  // n'est pas garanti d'être visible dans la même requête (course entre écriture et lecture),
+  // ce qui renvoyait certains patients vers l'accueil au lieu de leur espace après connexion.
+  const user = await prisma.user.findUnique({ where: { email }, select: { role: true } });
+  redirect(user?.role === "PATIENT" ? "/mes-rendez-vous" : "/tableau-de-bord");
 }

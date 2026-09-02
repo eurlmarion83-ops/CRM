@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
 import { signOut } from "@/auth";
+import { WaitlistRow } from "./waitlist-row";
 
 export default async function MesRendezVousPage({
   searchParams,
@@ -23,6 +24,14 @@ export default async function MesRendezVousPage({
   const now = new Date();
   const upcoming = appointments.filter((a) => a.start >= now && a.status === "CONFIRMED");
   const past = appointments.filter((a) => a.start < now || a.status !== "CONFIRMED");
+
+  const waitlistEntries = patient
+    ? await prisma.listeAttente.findMany({
+        where: { patientId: patient.id, statut: { in: ["ACTIVE", "NOTIFIE"] } },
+        include: { practitioner: { include: { user: true } }, motif: true },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
 
   return (
     <main className="flex-1">
@@ -87,6 +96,26 @@ export default async function MesRendezVousPage({
             </div>
           ))}
         </div>
+
+        {waitlistEntries.length > 0 && (
+          <>
+            <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Liste d&apos;attente</h2>
+            <div className="mt-2 flex flex-col gap-2">
+              {waitlistEntries.map((w) => (
+                <WaitlistRow
+                  key={w.id}
+                  entry={{
+                    id: w.id,
+                    practitionerName: `${w.practitioner.user.firstName} ${w.practitioner.user.lastName}`,
+                    motifName: w.motif.name,
+                    statut: w.statut,
+                    createdAt: w.createdAt.toLocaleDateString("fr-FR"),
+                  }}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Historique</h2>
         <div className="mt-2 flex flex-col gap-2">

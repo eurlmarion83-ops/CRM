@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/require-user";
 import { bookAppointment } from "@/lib/scheduling";
 import { notifyAppointment } from "@/lib/notifications";
 import { createNoShowTask } from "@/lib/task-automation";
+import { notifyWaitlistForFreedSlot } from "@/lib/waitlist";
 
 export type AgendaActionState = { error?: string; success?: boolean } | undefined;
 
@@ -76,6 +77,9 @@ export async function createAppointmentAction(_prev: AgendaActionState, formData
 
 export async function cancelAppointmentStaffAction(appointmentId: string, reason: "CANCELLED" | "NO_SHOW") {
   const user = await requireUser(["PRACTITIONER", "SECRETARY", "ADMIN"]);
+  const appointment = await prisma.rendezVous.findUnique({ where: { id: appointmentId } });
+  if (!appointment) throw new Error("Rendez-vous introuvable.");
+
   await prisma.rendezVous.update({
     where: { id: appointmentId },
     data:
@@ -88,6 +92,9 @@ export async function cancelAppointmentStaffAction(appointmentId: string, reason
   });
   if (reason === "NO_SHOW") {
     await createNoShowTask(appointmentId);
+  }
+  if (reason === "CANCELLED" && appointment.start > new Date()) {
+    await notifyWaitlistForFreedSlot(appointment.practitionerId, appointment.motifId, appointment.start);
   }
   revalidatePath("/agenda");
   revalidatePath("/taches");

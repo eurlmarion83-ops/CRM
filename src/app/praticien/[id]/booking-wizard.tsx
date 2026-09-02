@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useActionState } from "react";
-import { bookAction } from "./actions";
+import { bookAction, joinWaitlistAction } from "./actions";
 import { MOTIF_TYPE_LABELS, type MotifType } from "@/lib/enums";
 
 type Motif = {
@@ -35,6 +35,7 @@ export function BookingWizard({
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SlotDTO | null>(null);
   const [state, formAction, pending] = useActionState(bookAction, undefined);
+  const [waitlistState, waitlistAction, waitlistPending] = useActionState(joinWaitlistAction, undefined);
 
   useEffect(() => {
     if (!motifId) return;
@@ -104,7 +105,68 @@ export function BookingWizard({
         <h2 className="font-semibold text-slate-900">2. Choisissez un créneau</h2>
         {loadingSlots && <p className="mt-2 text-sm text-slate-500">Recherche des créneaux disponibles...</p>}
         {!loadingSlots && slots.length === 0 && (
-          <p className="mt-2 text-sm text-slate-500">Aucun créneau disponible dans les 3 prochaines semaines.</p>
+          <div className="mt-2">
+            <p className="text-sm text-slate-500">Aucun créneau disponible dans les 3 prochaines semaines.</p>
+            {waitlistState?.success ? (
+              <p className="mt-2 rounded-lg bg-success/10 p-3 text-sm text-success">
+                Vous êtes inscrit(e) sur la liste d&apos;attente : nous vous préviendrons dès qu&apos;une place se libère.
+              </p>
+            ) : (
+              <form action={waitlistAction} className="mt-3 flex flex-col gap-2 rounded-lg border border-border p-3">
+                <p className="text-sm font-medium text-slate-800">Rejoindre la liste d&apos;attente</p>
+                <input type="hidden" name="practitionerId" value={practitionerId} />
+                <input type="hidden" name="motifId" value={motifId} />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    name="firstName"
+                    placeholder="Prénom"
+                    defaultValue={defaultFirstName}
+                    required
+                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                  />
+                  <input
+                    name="lastName"
+                    placeholder="Nom"
+                    defaultValue={defaultLastName}
+                    required
+                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                  />
+                </div>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="Email"
+                  defaultValue={defaultEmail}
+                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                />
+                <input
+                  type="tel"
+                  name="phone"
+                  placeholder="Téléphone mobile (notification SMS)"
+                  defaultValue={defaultPhone}
+                  className="rounded-lg border border-border px-3 py-2 text-sm"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-xs text-slate-500">
+                    Au plus tôt (facultatif)
+                    <input type="date" name="preferredFrom" className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm" />
+                  </label>
+                  <label className="text-xs text-slate-500">
+                    Au plus tard (facultatif)
+                    <input type="date" name="preferredTo" className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm" />
+                  </label>
+                </div>
+                {waitlistState?.error && <p className="text-sm text-danger">{waitlistState.error}</p>}
+                <button
+                  type="submit"
+                  disabled={waitlistPending}
+                  className="rounded-full border border-brand px-4 py-2 text-sm font-medium text-brand-dark hover:bg-brand-light disabled:opacity-60"
+                >
+                  {waitlistPending ? "Inscription..." : "Être prévenu(e) si une place se libère"}
+                </button>
+              </form>
+            )}
+          </div>
         )}
         <div className="mt-3 flex flex-col gap-3 max-h-72 overflow-y-auto pr-1">
           {[...slotsByDay.entries()].map(([day, daySlots]) => (

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { verifyAppointmentToken } from "@/lib/access-token";
 import { notifyAppointment } from "@/lib/notifications";
+import { notifyWaitlistForFreedSlot } from "@/lib/waitlist";
 
 export type CancelState = { error?: string; success?: boolean } | undefined;
 
@@ -56,6 +57,10 @@ export async function cancelAppointmentAction(_prev: CancelState, formData: Form
     emailBody: `Votre rendez-vous du ${appointment.start.toLocaleString("fr-FR")} a été annulé.`,
     establishmentId: appointment.establishmentId,
   });
+
+  if (appointment.start > new Date()) {
+    await notifyWaitlistForFreedSlot(appointment.practitionerId, appointment.motifId, appointment.start);
+  }
 
   revalidatePath("/mes-rendez-vous");
   return { success: true };

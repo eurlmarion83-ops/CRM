@@ -97,3 +97,72 @@ export async function bookAction(_prevState: BookState, formData: FormData): Pro
   const token = signAppointmentToken(appointmentId);
   redirect(`/confirmation/${appointmentId}?token=${token}`);
 }
+
+export type WaitlistState = { error?: string; success?: boolean } | undefined;
+
+export async function joinWaitlistAction(_prevState: WaitlistState, formData: FormData): Promise<WaitlistState> {
+  const practitionerId = String(formData.get("practitionerId") ?? "");
+  const motifId = String(formData.get("motifId") ?? "");
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const lastName = String(formData.get("lastName") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const phone = String(formData.get("phone") ?? "").trim();
+  const preferredFromStr = String(formData.get("preferredFrom") ?? "").trim();
+  const preferredToStr = String(formData.get("preferredTo") ?? "").trim();
+
+  if (!practitionerId || !motifId || !firstName || !lastName || (!email && !phone)) {
+    return { error: "Merci de compléter tous les champs obligatoires." };
+  }
+
+  const motif = await prisma.motif.findUnique({ where: { id: motifId } });
+  if (!motif || motif.practitionerId !== practitionerId || !motif.onlineBookable || !motif.active) {
+    return { error: "Ce motif n'est plus disponible en ligne." };
+  }
+
+  const practitioner = await prisma.practitioner.findUnique({ where: { id: practitionerId } });
+  if (!practitioner) return { error: "Praticien introuvable." };
+
+  const session = await auth();
+  let patientId: string;
+
+  if (session?.user.role === "PATIENT") {
+    const patient = await prisma.patient.upsert({
+      where: { userId: session.user.id },
+      update: { firstName, lastName, email, phone },
+      create: { userId: session.user.id, firstName, lastName, email, phone, establishmentId: practitioner.establishmentId },
+    });
+    patientId = patient.id;
+  } else {
+    const existing = email ? await prisma.patient.findFirst({ where: { email, userId: null } }) : null;
+    const patient = existing
+      ? await prisma.patient.update({ where: { id: existing.id }, data: { firstName, lastName, phone } })
+      : await prisma.patient.create({ data: { firstName, lastName, email, phone, establishmentId: practitioner.establishmentId } });
+    patientId = patient.id;
+  }
+
+  const alreadyActive = await prisma.listeAttente.findFirst({
+    where: { practitionerId, motifId, patientId, statut: { in: ["ACTIVE", "NOTIFIE"] } },
+  });
+  if (alreadyActive) {
+    return { error: "Vous êtes déjà inscrit(e) sur la liste d'attente pour ce motif." };
+  }
+
+  const preferredFrom = preferredFromStr ? new Date(`${preferredFromStr}T00:00:00`) : null;
+  const preferredTo = preferredToStr ? new Date(`${preferredToStr}T23:59:59`) : null;
+
+  await prisma.listeAttente.create({
+    data: {
+      practitionerId,
+      motifId,
+      patientId,
+      preferredFrom: preferredFrom && !Number.isNaN(preferredFrom.getTime()) ? preferredFrom : null,
+      preferredTo: preferredTo && !Number.isNaN(preferredTo.getTime()) ? preferredTo : null,
+    },
+  });
+
+  await prisma.journalActivite.create({
+    data: { userId: session?.user.id, action: "LISTE_ATTENTE_INSCRIPTION", entityType: "ListeAttente", entityId: practitionerId },
+  });
+
+  return { success: true };
+}

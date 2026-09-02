@@ -68,6 +68,11 @@ export async function sendEmail(to: string, subject: string, body: string) {
   await getEmailProvider().send(to, subject, body);
 }
 
+/** Envoi SMS générique (hors contexte RDV, ex. notification de liste d'attente) — pas de journalisation ReminderLog. */
+export async function sendSms(to: string, body: string) {
+  await getSmsProvider().send(to, body);
+}
+
 export async function notifyAppointment(params: {
   appointmentId: string;
   kind: ReminderKind;
