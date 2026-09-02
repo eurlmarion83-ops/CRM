@@ -162,6 +162,7 @@ export async function seedDemoData() {
       firstName: "Sophie",
       lastName: "Girard",
       phone: "0601020308",
+      establishmentId: establishment.id,
     },
   });
 

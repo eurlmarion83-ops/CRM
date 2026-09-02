@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
-import { getManageablePractitioners } from "@/lib/agenda-data";
+import { getManageablePractitioners, isPatientInScope } from "@/lib/agenda-data";
 import { PatientConversationThread } from "./thread-client";
 
 export default async function PatientConversationPage({ params }: { params: Promise<{ id: string }> }) {
@@ -11,6 +11,7 @@ export default async function PatientConversationPage({ params }: { params: Prom
 
   const conversation = await prisma.conversationPatient.findUnique({ where: { id }, include: { patient: true } });
   if (!conversation) notFound();
+  if (!(await isPatientInScope(conversation.patientId, user))) notFound();
 
   const manageable = await getManageablePractitioners(user);
 

@@ -31,7 +31,7 @@ export async function createAppointmentAction(_prev: AgendaActionState, formData
   let patientId = existingPatientId;
   if (!patientId) {
     if (!firstName || !lastName) return { error: "Sélectionnez un patient existant ou renseignez nom/prénom." };
-    const patient = await prisma.patient.create({ data: { firstName, lastName, email, phone } });
+    const patient = await prisma.patient.create({ data: { firstName, lastName, email, phone, establishmentId: practitioner.establishmentId } });
     patientId = patient.id;
   }
 

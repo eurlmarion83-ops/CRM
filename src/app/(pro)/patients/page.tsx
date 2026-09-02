@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
+import { getVisiblePractitioners, getCurrentEstablishmentId } from "@/lib/agenda-data";
 import { createPatientAction } from "./actions";
 
 export default async function PatientsPage({
@@ -8,20 +9,41 @@ export default async function PatientsPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
-  await requireUser(["PRACTITIONER", "SECRETARY", "ADMIN"]);
+  const user = await requireUser(["PRACTITIONER", "SECRETARY", "ADMIN"]);
   const { q } = await searchParams;
 
+  const [establishmentId, visiblePractitioners] = await Promise.all([
+    getCurrentEstablishmentId(user),
+    getVisiblePractitioners(user),
+  ]);
+  const practitionerIds = visiblePractitioners.map((p) => p.id);
+
+  // Isolation multi-tenant : un patient appartient au carnet d'un cabinet soit parce qu'il y a
+  // été créé/rattaché, soit parce qu'il a déjà un RDV avec l'un de ses praticiens (cas d'un
+  // patient créé avant cette évolution, ou réservé en ligne avant que le champ existe).
+  const scope = {
+    OR: [
+      ...(establishmentId ? [{ establishmentId }] : []),
+      { appointments: { some: { practitionerId: { in: practitionerIds } } } },
+    ],
+  };
+
   const patients = await prisma.patient.findMany({
-    where: q
-      ? {
-          OR: [
-            { firstName: { contains: q } },
-            { lastName: { contains: q } },
-            { email: { contains: q } },
-            { phone: { contains: q } },
-          ],
-        }
-      : undefined,
+    where: {
+      AND: [
+        scope,
+        q
+          ? {
+              OR: [
+                { firstName: { contains: q } },
+                { lastName: { contains: q } },
+                { email: { contains: q } },
+                { phone: { contains: q } },
+              ],
+            }
+          : {},
+      ],
+    },
     orderBy: { lastName: "asc" },
     take: 50,
     include: { _count: { select: { appointments: true } } },
@@ -30,9 +52,7 @@ export default async function PatientsPage({
   return (
     <main className="px-6 py-8">
       <h1 className="text-2xl font-semibold text-slate-900">Patients</h1>
-      <p className="text-slate-600">
-        Base patients (Bloc 4 en construction : dossier complet, documents, historique détaillé).
-      </p>
+      <p className="text-slate-600">Carnet patients de votre cabinet.</p>
 
       <form className="mt-4 flex gap-3">
         <input

@@ -6,7 +6,17 @@ export type StaffUser = { id: string; role: Role };
 /** Praticiens visibles par un membre du personnel (agenda partagé multi-praticiens). */
 export async function getVisiblePractitioners(user: StaffUser) {
   if (user.role === "ADMIN") {
-    return prisma.practitioner.findMany({ include: { user: true }, orderBy: { user: { lastName: "asc" } } });
+    // ⚠️ Isolation multi-tenant : un admin ne doit voir que son propre établissement, jamais
+    // les praticiens d'un autre cabinet inscrit sur la plateforme. Sans establishmentId
+    // configuré (compte orphelin), on renvoie volontairement une liste vide plutôt que de
+    // fuiter les données de tous les cabinets par défaut.
+    const admin = await prisma.user.findUnique({ where: { id: user.id }, select: { establishmentId: true } });
+    if (!admin?.establishmentId) return [];
+    return prisma.practitioner.findMany({
+      where: { establishmentId: admin.establishmentId },
+      include: { user: true },
+      orderBy: { user: { lastName: "asc" } },
+    });
   }
 
   if (user.role === "PRACTITIONER") {
@@ -43,6 +53,37 @@ export async function getManageablePractitioners(user: StaffUser) {
     return me ? [me] : [];
   }
   return getVisiblePractitioners(user);
+}
+
+/**
+ * Établissement "courant" d'un membre du personnel — sert à rattacher les nouveaux patients
+ * créés (booking ou saisie manuelle) au bon cabinet pour l'isolation multi-tenant. Une
+ * secrétaire assignée à des praticiens de plusieurs cabinets renvoie le premier trouvé (limite
+ * connue : pas de sélecteur de cabinet actif pour ce cas, cf. README).
+ */
+export async function getCurrentEstablishmentId(user: StaffUser): Promise<string | null> {
+  if (user.role === "ADMIN") {
+    const admin = await prisma.user.findUnique({ where: { id: user.id }, select: { establishmentId: true } });
+    return admin?.establishmentId ?? null;
+  }
+  const practitioners = await getVisiblePractitioners(user);
+  return practitioners[0]?.establishmentId ?? null;
+}
+
+/** Vrai si ce patient appartient au cabinet de l'utilisateur (isolation multi-tenant). */
+export async function isPatientInScope(patientId: string, user: StaffUser): Promise<boolean> {
+  const [establishmentId, visiblePractitioners] = await Promise.all([
+    getCurrentEstablishmentId(user),
+    getVisiblePractitioners(user),
+  ]);
+  const practitionerIds = visiblePractitioners.map((p) => p.id);
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: patientId },
+    select: { establishmentId: true, appointments: { where: { practitionerId: { in: practitionerIds } }, select: { id: true }, take: 1 } },
+  });
+  if (!patient) return false;
+  return (establishmentId != null && patient.establishmentId === establishmentId) || patient.appointments.length > 0;
 }
 
 export async function getAgendaAppointments(practitionerIds: string[], from: Date, to: Date) {

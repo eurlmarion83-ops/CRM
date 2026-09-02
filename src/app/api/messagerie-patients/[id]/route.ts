@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isPatientInScope } from "@/lib/agenda-data";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -9,6 +10,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
+  const conversation = await prisma.conversationPatient.findUnique({ where: { id }, select: { patientId: true } });
+  if (!conversation) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
+  if (!(await isPatientInScope(conversation.patientId, session.user))) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 403 });
+  }
+
   const messages = await prisma.messagePatient.findMany({
     where: { conversationPatientId: id },
     include: { authorUser: true },

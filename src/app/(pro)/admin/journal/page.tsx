@@ -1,22 +1,41 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
+import { getVisiblePractitioners } from "@/lib/agenda-data";
 
 export default async function JournalPage({
   searchParams,
 }: {
   searchParams: Promise<{ action?: string }>;
 }) {
-  await requireUser(["ADMIN"]);
+  const admin = await requireUser(["ADMIN"]);
   const { action } = await searchParams;
 
+  // Isolation multi-tenant : un admin ne voit que le journal de son propre cabinet (lui-même,
+  // ses praticiens, et les secrétaires qui leur sont assignées) — jamais celui d'un autre client
+  // de la plateforme.
+  const practitioners = await getVisiblePractitioners(admin);
+  const practitionerIds = practitioners.map((p) => p.id);
+  const secretaryAssignments = practitionerIds.length
+    ? await prisma.secretaryAssignment.findMany({
+        where: { practitionerId: { in: practitionerIds } },
+        include: { secretary: true },
+      })
+    : [];
+  const scopedUserIds = [
+    admin.id,
+    ...practitioners.map((p) => p.userId),
+    ...secretaryAssignments.map((a) => a.secretary.userId),
+  ];
+
   const entries = await prisma.journalActivite.findMany({
-    where: action ? { action } : undefined,
+    where: { userId: { in: scopedUserIds }, ...(action ? { action } : {}) },
     include: { user: true },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
 
   const distinctActions = await prisma.journalActivite.findMany({
+    where: { userId: { in: scopedUserIds } },
     distinct: ["action"],
     select: { action: true },
     orderBy: { action: "asc" },

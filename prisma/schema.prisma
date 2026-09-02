@@ -17,17 +17,21 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model User {
-  id               String   @id @default(cuid())
-  email            String   @unique
+  id               String         @id @default(cuid())
+  email            String         @unique
   passwordHash     String
   role             String // PATIENT | PRACTITIONER | SECRETARY | ADMIN
   firstName        String
   lastName         String
   phone            String?
   twoFactorSecret  String? // secret TOTP (chiffré au niveau applicatif recommandé en prod)
-  twoFactorEnabled Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  twoFactorEnabled Boolean        @default(false)
+  establishmentId  String? // établissement "de rattachement" — surtout utile pour ADMIN, qui
+  // n'a pas d'autre moyen de déduire son cabinet (un PRACTITIONER l'a via Practitioner.establishmentId,
+  // un SECRETARY via ses praticiens assignés). Isole les cabinets entre eux en multi-tenant.
+  establishment    Establishment? @relation(fields: [establishmentId], references: [id])
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   practitioner        Practitioner?
   secretaryProfile    SecretaryProfile?
@@ -51,6 +55,8 @@ model Establishment {
   practitioners Practitioner[]
   appointments  RendezVous[]
   quota         Quota?
+  users         User[]
+  patients      Patient[]
 
   createdAt DateTime @default(now())
 }
@@ -78,6 +84,8 @@ model Practitioner {
   secretaries          SecretaryAssignment[]
   documents            DocumentMedical[]
   conversationsPatient ConversationPatient[]
+  avis                 Avis[]
+  listeAttente         ListeAttente[]
 
   createdAt DateTime @default(now())
 }
@@ -102,21 +110,28 @@ model SecretaryAssignment {
 }
 
 model Patient {
-  id        String    @id @default(cuid())
-  userId    String?   @unique
-  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  firstName String
-  lastName  String
-  email     String?
-  phone     String?
-  birthDate DateTime?
-  address   String?
-  city      String?
-  notes     String?
+  id              String         @id @default(cuid())
+  userId          String?        @unique
+  user            User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  birthDate       DateTime?
+  address         String?
+  city            String?
+  notes           String?
+  establishmentId String? // cabinet "d'origine" (première réservation/création) — isolation
+  // multi-tenant de la liste patients ; un patient peut malgré tout avoir des RDV avec des
+  // praticiens d'autres cabinets s'il les a réservés lui-même (non bloqué, juste pas listé
+  // dans le "carnet patients" d'un cabinet auquel il n'est pas rattaché).
+  establishment   Establishment? @relation(fields: [establishmentId], references: [id])
 
   appointments         RendezVous[]
   conversationsPatient ConversationPatient[]
   documents            DocumentMedical[]
+  avis                 Avis[]
+  listeAttente         ListeAttente[]
 
   createdAt DateTime @default(now())
 }
@@ -140,6 +155,7 @@ model Motif {
 
   appointments     RendezVous[]
   slotRestrictions AvailabilityMotif[]
+  listeAttente     ListeAttente[]
 
   createdAt DateTime @default(now())
 }
@@ -218,6 +234,7 @@ model RendezVous {
   tasks            Tache[]
   documents        DocumentMedical[]
   payment          Payment?
+  avis             Avis?
 
   @@index([practitionerId, start])
   @@index([patientId])
@@ -383,6 +400,9 @@ model MessageInterne {
   authorId       String
   author         User         @relation(fields: [authorId], references: [id])
   content        String
+  attachmentName String?
+  attachmentType String?
+  attachmentData String? // base64, plafonné côté application — voir src/lib/attachments.ts
   createdAt      DateTime     @default(now())
 }
 
@@ -405,5 +425,59 @@ model MessagePatient {
   authorUserId          String?
   authorUser            User?               @relation(fields: [authorUserId], references: [id])
   content               String
+  attachmentName        String?
+  attachmentType        String?
+  attachmentData        String? // base64, plafonné côté application — voir src/lib/attachments.ts
   createdAt             DateTime            @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Avis patients, liste d'attente, prospects & tickets (extensions Doctolib/Inozis)
+// ---------------------------------------------------------------------------
+
+model Avis {
+  id             String       @id @default(cuid())
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointmentId  String?      @unique
+  appointment    RendezVous?  @relation(fields: [appointmentId], references: [id])
+  note           Int // 1 à 5
+  commentaire    String?
+  publie         Boolean      @default(true) // modération basique : masquer sans supprimer
+  createdAt      DateTime     @default(now())
+}
+
+model ListeAttente {
+  id             String       @id @default(cuid())
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  motifId        String
+  motif          Motif        @relation(fields: [motifId], references: [id], onDelete: Cascade)
+  preferredFrom  DateTime?
+  preferredTo    DateTime?
+  statut         String       @default("ACTIVE") // ACTIVE | NOTIFIE | RESERVE | ANNULE
+  createdAt      DateTime     @default(now())
+}
+
+model SuiviProspect {
+  id           String   @id @default(cuid())
+  nom          String
+  contactEmail String?
+  contactPhone String?
+  statut       String   @default("NOUVEAU") // NOUVEAU | CONTACTE | QUALIFIE | GAGNE | PERDU
+  notes        String?
+  createdAt    DateTime @default(now())
+}
+
+model Ticket {
+  id          String   @id @default(cuid())
+  titre       String
+  description String?
+  statut      String   @default("OUVERT") // OUVERT | EN_COURS | RESOLU
+  priorite    String   @default("NORMALE") // BASSE | NORMALE | HAUTE
+  createdAt   DateTime @default(now())
 }

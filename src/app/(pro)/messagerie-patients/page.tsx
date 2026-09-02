@@ -1,11 +1,26 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
+import { getVisiblePractitioners, getCurrentEstablishmentId } from "@/lib/agenda-data";
 
 export default async function MessagerieePatientsPage() {
-  await requireUser(["PRACTITIONER", "SECRETARY", "ADMIN"]);
+  const user = await requireUser(["PRACTITIONER", "SECRETARY", "ADMIN"]);
+
+  const [establishmentId, visiblePractitioners] = await Promise.all([
+    getCurrentEstablishmentId(user),
+    getVisiblePractitioners(user),
+  ]);
+  const practitionerIds = visiblePractitioners.map((p) => p.id);
 
   const conversations = await prisma.conversationPatient.findMany({
+    where: {
+      patient: {
+        OR: [
+          ...(establishmentId ? [{ establishmentId }] : []),
+          { appointments: { some: { practitionerId: { in: practitionerIds } } } },
+        ],
+      },
+    },
     include: {
       patient: true,
       assignedPractitioner: { include: { user: true } },

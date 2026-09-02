@@ -44,14 +44,14 @@ export async function bookAction(_prevState: BookState, formData: FormData): Pro
     const patient = await prisma.patient.upsert({
       where: { userId: session.user.id },
       update: { firstName, lastName, email, phone },
-      create: { userId: session.user.id, firstName, lastName, email, phone },
+      create: { userId: session.user.id, firstName, lastName, email, phone, establishmentId: practitioner.establishmentId },
     });
     patientId = patient.id;
   } else {
     const existing = email ? await prisma.patient.findFirst({ where: { email, userId: null } }) : null;
     const patient = existing
       ? await prisma.patient.update({ where: { id: existing.id }, data: { firstName, lastName, phone } })
-      : await prisma.patient.create({ data: { firstName, lastName, email, phone } });
+      : await prisma.patient.create({ data: { firstName, lastName, email, phone, establishmentId: practitioner.establishmentId } });
     patientId = patient.id;
   }
 

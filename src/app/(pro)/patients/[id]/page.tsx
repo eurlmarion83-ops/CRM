@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
-import { getManageablePractitioners } from "@/lib/agenda-data";
+import { getManageablePractitioners, isPatientInScope } from "@/lib/agenda-data";
 import { NewDocumentForm } from "./new-document-form";
 import { MergeForm } from "./merge-form";
 
@@ -27,6 +27,7 @@ export default async function PatientDetailPage({ params }: { params: Promise<{ 
     },
   });
   if (!patient) notFound();
+  if (!(await isPatientInScope(patient.id, user))) notFound();
 
   const manageable = await getManageablePractitioners(user);
 
