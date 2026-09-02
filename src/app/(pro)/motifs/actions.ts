@@ -14,6 +14,13 @@ async function assertManageable(practitionerId: string) {
   return user;
 }
 
+function parsePriceCents(formData: FormData): number | null {
+  const raw = String(formData.get("prixEuros") ?? "").trim();
+  if (!raw) return null;
+  const value = Number(raw.replace(",", "."));
+  return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : null;
+}
+
 export async function createMotifAction(formData: FormData) {
   const practitionerId = String(formData.get("practitionerId") ?? "");
   await assertManageable(practitionerId);
@@ -28,6 +35,7 @@ export async function createMotifAction(formData: FormData) {
       durationMin: Number(formData.get("durationMin") ?? 30),
       type: String(formData.get("type") ?? "CABINET"),
       onlineBookable: formData.get("onlineBookable") === "on",
+      priceCents: parsePriceCents(formData),
       sortOrder: count,
     },
   });
@@ -48,6 +56,7 @@ export async function updateMotifAction(formData: FormData) {
       type: String(formData.get("type") ?? motif.type),
       onlineBookable: formData.get("onlineBookable") === "on",
       active: formData.get("active") === "on",
+      priceCents: parsePriceCents(formData),
     },
   });
   revalidatePath("/motifs");

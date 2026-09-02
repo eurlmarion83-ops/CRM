@@ -17,7 +17,7 @@ export default async function ConfirmationPage({
 
   const appointment = await prisma.rendezVous.findUnique({
     where: { id },
-    include: { practitioner: { include: { user: true } }, motif: true, patient: true, teleconsultation: true },
+    include: { practitioner: { include: { user: true } }, motif: true, patient: true, teleconsultation: true, payment: true },
   });
   if (!appointment) notFound();
 
@@ -57,6 +57,24 @@ export default async function ConfirmationPage({
           <p className="mt-2 text-sm text-slate-600">
             {appointment.practitioner.address}, {appointment.practitioner.city}
           </p>
+        )}
+
+        {appointment.motif.priceCents != null && appointment.payment?.status !== "PAID" && !isCancelled && (
+          <div className="mt-4 rounded-lg bg-warning/10 p-3 text-sm">
+            <p className="font-medium text-slate-900">
+              Paiement en ligne requis :{" "}
+              {(appointment.motif.priceCents / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}
+            </p>
+            <a
+              href={`/api/paiement/creer-session?appointmentId=${appointment.id}${token ? `&token=${token}` : ""}`}
+              className="mt-2 inline-block rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark"
+            >
+              Payer maintenant
+            </a>
+          </div>
+        )}
+        {appointment.payment?.status === "PAID" && (
+          <p className="mt-4 text-sm font-medium text-success">Consultation payée ✓</p>
         )}
 
         <div className="mt-6 flex flex-wrap gap-3">

@@ -73,6 +73,18 @@ export default async function MotifsPage({
                   <input type="checkbox" name="active" defaultChecked={m.active} />
                   Actif
                 </label>
+                <label className="flex items-center gap-1 text-xs">
+                  Prix (€)
+                  <input
+                    type="number"
+                    name="prixEuros"
+                    step="0.01"
+                    min="0"
+                    defaultValue={m.priceCents != null ? (m.priceCents / 100).toFixed(2) : ""}
+                    placeholder="gratuit"
+                    className="w-20 rounded-lg border border-border px-2 py-1 text-sm"
+                  />
+                </label>
                 <button className="rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-dark">
                   Enregistrer
                 </button>
@@ -114,6 +126,10 @@ export default async function MotifsPage({
             <label className="flex items-center gap-1 text-xs">
               <input type="checkbox" name="onlineBookable" />
               Réservable en ligne
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              Prix (€, optionnel)
+              <input type="number" name="prixEuros" step="0.01" min="0" placeholder="gratuit" className="w-24 rounded-lg border border-border px-2 py-2 text-sm" />
             </label>
             <button className="rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark">
               Ajouter le motif

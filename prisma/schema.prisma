@@ -136,6 +136,7 @@ model Motif {
   onlineBookable Boolean      @default(false) // par défaut : non réservable en ligne
   active         Boolean      @default(true)
   sortOrder      Int          @default(0)
+  priceCents     Int? // paiement en ligne optionnel (téléconsultation) ; null = pas de paiement demandé
 
   appointments     RendezVous[]
   slotRestrictions AvailabilityMotif[]
