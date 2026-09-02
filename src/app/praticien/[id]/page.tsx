@@ -14,10 +14,14 @@ export default async function PraticienPage({ params }: { params: Promise<{ id: 
       user: true,
       establishment: true,
       motifs: { where: { onlineBookable: true, active: true }, orderBy: { sortOrder: "asc" } },
+      avis: { where: { publie: true }, include: { patient: true }, orderBy: { createdAt: "desc" }, take: 20 },
     },
   });
 
   if (!practitioner) notFound();
+
+  const avisCount = practitioner.avis.length;
+  const avisMoyenne = avisCount > 0 ? practitioner.avis.reduce((s, a) => s + a.note, 0) / avisCount : null;
 
   const session = await auth();
   let patient = null;
@@ -51,6 +55,15 @@ export default async function PraticienPage({ params }: { params: Promise<{ id: 
                   {practitioner.user.firstName} {practitioner.user.lastName}
                 </h1>
                 <p className="text-slate-600">{practitioner.specialty}</p>
+                {avisMoyenne !== null && (
+                  <p className="mt-1 text-sm text-warning">
+                    {"★".repeat(Math.round(avisMoyenne))}
+                    {"☆".repeat(5 - Math.round(avisMoyenne))}{" "}
+                    <span className="text-slate-500">
+                      {avisMoyenne.toFixed(1)}/5 ({avisCount} avis)
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
             {practitioner.bio && <p className="mt-4 text-sm text-slate-600">{practitioner.bio}</p>}
@@ -90,6 +103,28 @@ export default async function PraticienPage({ params }: { params: Promise<{ id: 
           />
         </div>
       </section>
+
+      {practitioner.avis.length > 0 && (
+        <section className="mx-auto max-w-5xl px-6 pb-12">
+          <h2 className="text-lg font-semibold text-slate-900">Avis patients</h2>
+          <div className="mt-3 flex flex-col gap-3">
+            {practitioner.avis.map((a) => (
+              <div key={a.id} className="card p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-warning">
+                    {"★".repeat(a.note)}
+                    {"☆".repeat(5 - a.note)}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {a.patient.firstName} {a.patient.lastName[0]}. — {a.createdAt.toLocaleDateString("fr-FR")}
+                  </span>
+                </div>
+                {a.commentaire && <p className="mt-2 text-sm text-slate-600">{a.commentaire}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

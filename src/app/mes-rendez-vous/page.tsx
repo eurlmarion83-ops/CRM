@@ -3,14 +3,19 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
 import { signOut } from "@/auth";
 
-export default async function MesRendezVousPage() {
+export default async function MesRendezVousPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ avis?: string }>;
+}) {
   const user = await requireUser(["PATIENT"]);
+  const { avis } = await searchParams;
 
   const patient = await prisma.patient.findUnique({ where: { userId: user.id } });
   const appointments = patient
     ? await prisma.rendezVous.findMany({
         where: { patientId: patient.id },
-        include: { practitioner: { include: { user: true } }, motif: true, teleconsultation: true },
+        include: { practitioner: { include: { user: true } }, motif: true, teleconsultation: true, avis: true },
         orderBy: { start: "desc" },
       })
     : [];
@@ -47,6 +52,9 @@ export default async function MesRendezVousPage() {
 
       <section className="mx-auto max-w-3xl px-6 py-8">
         <h1 className="text-2xl font-semibold text-slate-900">Mes rendez-vous</h1>
+        {avis === "merci" && (
+          <p className="mt-2 rounded-lg bg-success/10 p-3 text-sm text-success">Merci pour votre avis !</p>
+        )}
 
         <h2 className="mt-6 text-sm font-semibold uppercase tracking-wide text-slate-500">À venir</h2>
         <div className="mt-2 flex flex-col gap-3">
@@ -88,8 +96,13 @@ export default async function MesRendezVousPage() {
               <span>
                 {a.motif.name} — {a.practitioner.user.firstName} {a.practitioner.user.lastName}
               </span>
-              <span className="text-slate-500">
+              <span className="flex items-center gap-2 text-slate-500">
                 {a.start.toLocaleDateString("fr-FR")} · {a.status}
+                {a.status !== "CANCELLED" && !a.avis && a.start < now && (
+                  <Link href={`/avis/${a.id}`} className="text-brand-dark underline">
+                    Laisser un avis
+                  </Link>
+                )}
               </span>
             </div>
           ))}
