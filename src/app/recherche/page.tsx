@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { searchAnnuaireSante } from "@/lib/directory";
 
 export default async function RecherchePage({
   searchParams,
@@ -25,6 +26,8 @@ export default async function RecherchePage({
     include: { user: true, establishment: true, motifs: { where: { onlineBookable: true, active: true } } },
     orderBy: { user: { lastName: "asc" } },
   });
+
+  const externalResults = q || ville ? await searchAnnuaireSante({ q, city: ville }) : [];
 
   return (
     <main className="flex-1">
@@ -97,6 +100,41 @@ export default async function RecherchePage({
             </Link>
           ))}
         </div>
+
+        {externalResults.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Autres professionnels trouvés dans l&apos;annuaire national
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Ces praticiens ne sont pas inscrits sur cette plateforme : contactez-les directement,
+              la réservation en ligne n&apos;est pas disponible pour eux ici.
+            </p>
+            <div className="mt-3 flex flex-col gap-3">
+              {externalResults.map((r, i) => (
+                <div key={i} className="card flex items-center gap-4 p-4 opacity-90">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-lg font-semibold text-slate-500">
+                    {r.firstName[0]}
+                    {r.lastName[0]}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">
+                      {r.firstName} {r.lastName}
+                    </p>
+                    <p className="text-sm text-slate-600">{r.specialty}</p>
+                    <p className="text-sm text-slate-500">
+                      {r.address ? `${r.address}, ` : ""}
+                      {r.city} {r.phone ? `· ${r.phone}` : ""}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-border px-3 py-1 text-xs text-slate-500">
+                    Non réservable en ligne
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
     </main>
   );

@@ -117,6 +117,24 @@ Documentées ici pour transparence — à traiter avant une mise en production r
 - **Dédoublonnage patients invités** : une réservation invité recherche un patient existant par
   email exact ; pas de fusion de doublons avancée (prévue en Bloc 4).
 
+## Annuaire national des professionnels de santé — pourquoi il n'y a pas "tous les médecins de France"
+
+Ce projet ne contient **aucune donnée de praticien inventée** au-delà du jeu de démonstration
+explicitement identifié comme tel. Il n'existe pas de fichier public "tous les médecins de France"
+qu'on puisse importer tel quel : la source légitime est le **Répertoire Partagé des Professionnels
+de Santé (RPPS/ADELI)**, publié par l'Agence du Numérique en Santé via **Annuaire Santé**
+(annuaire.sante.fr / esante.gouv.fr).
+
+`src/lib/directory.ts` prépare l'intégration : `searchLocalPractitioners()` (praticiens inscrits,
+réservables en ligne — ce que `/recherche` utilisait déjà) et `searchAnnuaireSante()` (stub prêt à
+brancher sur l'API officielle, retourne `[]` tant que `ANNUAIRE_SANTE_API_KEY` n'est pas
+configurée). Un praticien remonté depuis l'annuaire national s'affiche toujours avec
+`bookableOnline: false` : l'app ne doit jamais laisser réserver un créneau chez un praticien qui
+n'a pas configuré son propre agenda sur la plateforme, même si ses coordonnées publiques sont
+connues. Pour activer une vraie recherche nationale, il faut s'inscrire comme développeur sur
+esante.gouv.fr et implémenter l'appel FHIR dans `searchAnnuaireSante()` (non vérifié en ligne
+lors de l'écriture de ce document — revalider le format d'API actuel).
+
 ## Architecture & roadmap Blocs 2-5
 
 Le schéma Prisma (`prisma/schema.prisma`) inclut déjà des modèles "stub" pour les blocs suivants,
