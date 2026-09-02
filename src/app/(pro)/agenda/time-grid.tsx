@@ -14,6 +14,10 @@ function minutesFromDayStart(date: Date) {
   return (date.getHours() - DAY_START_HOUR) * 60 + date.getMinutes();
 }
 
+function minutesFromOffsetY(offsetY: number) {
+  return Math.round(offsetY / PX_PER_MIN / 15) * 15;
+}
+
 function NowLine() {
   const [top, setTop] = useState<number | null>(null);
   useEffect(() => {
@@ -40,8 +44,13 @@ function AppointmentBlock({ appt, onClick }: { appt: AgendaAppointment; onClick:
   return (
     <button
       onClick={onClick}
+      draggable={!cancelled}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", appt.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       className={`absolute left-0.5 right-0.5 overflow-hidden rounded-md px-1.5 py-0.5 text-left text-[11px] text-white shadow-sm ${
-        cancelled ? "opacity-40 line-through" : ""
+        cancelled ? "opacity-40 line-through" : "cursor-grab active:cursor-grabbing"
       }`}
       style={{ top, height, backgroundColor: appt.motifColor }}
       title={`${appt.patientName} — ${appt.motifName}`}
@@ -65,71 +74,124 @@ function HourRuler() {
   );
 }
 
+/** Colonne d'un praticien pour un jour donné : grille horaire, clic pour créer, glisser-déposer pour déplacer. */
+function PractitionerDayColumn({
+  date,
+  practitioner,
+  appointments,
+  onSlotClick,
+  onAppointmentClick,
+  onAppointmentDrop,
+  compact,
+}: {
+  date: Date;
+  practitioner: AgendaPractitioner;
+  appointments: AgendaAppointment[];
+  onSlotClick: (practitionerId: string, date: Date) => void;
+  onAppointmentClick: (appt: AgendaAppointment) => void;
+  onAppointmentDrop: (appointmentId: string, practitionerId: string, newStart: Date) => void;
+  compact?: boolean;
+}) {
+  const dayAppts = appointments.filter((a) => a.practitionerId === practitioner.id && isSameDay(new Date(a.start), date));
+
+  return (
+    <div className="relative flex-1 border-l border-border">
+      <div
+        className={`sticky top-0 z-20 border-b border-border bg-surface px-2 py-1 text-xs font-medium ${compact ? "truncate" : ""}`}
+        style={{ color: practitioner.color }}
+      >
+        {practitioner.name}
+      </div>
+      <div
+        className="relative cursor-pointer"
+        style={{ height: TOTAL_MIN * PX_PER_MIN }}
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const minutes = minutesFromOffsetY(e.clientY - rect.top);
+          const clicked = new Date(date);
+          clicked.setHours(DAY_START_HOUR, 0, 0, 0);
+          clicked.setMinutes(clicked.getMinutes() + minutes);
+          onSlotClick(practitioner.id, clicked);
+        }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const appointmentId = e.dataTransfer.getData("text/plain");
+          if (!appointmentId) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          const minutes = minutesFromOffsetY(e.clientY - rect.top);
+          const newStart = new Date(date);
+          newStart.setHours(DAY_START_HOUR, 0, 0, 0);
+          newStart.setMinutes(newStart.getMinutes() + minutes);
+          onAppointmentDrop(appointmentId, practitioner.id, newStart);
+        }}
+      >
+        {Array.from({ length: (DAY_END_HOUR - DAY_START_HOUR) * 2 }).map((_, i) => (
+          <div key={i} className="absolute left-0 right-0 border-t border-border/60" style={{ top: i * 30 * PX_PER_MIN }} />
+        ))}
+        {isSameDay(date, new Date()) && <NowLine />}
+        {dayAppts.map((appt) => (
+          <AppointmentBlock key={appt.id} appt={appt} onClick={() => onAppointmentClick(appt)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function DayGrid({
   date,
   practitioners,
   appointments,
   onSlotClick,
   onAppointmentClick,
+  onAppointmentDrop,
 }: {
   date: Date;
   practitioners: AgendaPractitioner[];
   appointments: AgendaAppointment[];
   onSlotClick: (practitionerId: string, date: Date) => void;
   onAppointmentClick: (appt: AgendaAppointment) => void;
+  onAppointmentDrop: (appointmentId: string, practitionerId: string, newStart: Date) => void;
 }) {
   return (
     <div className="flex">
       <HourRuler />
       <div className="relative flex flex-1" style={{ height: TOTAL_MIN * PX_PER_MIN }}>
-        {practitioners.map((p) => {
-          const dayAppts = appointments.filter((a) => a.practitionerId === p.id && isSameDay(new Date(a.start), date));
-          return (
-            <div key={p.id} className="relative flex-1 border-l border-border">
-              <div className="sticky top-0 z-20 border-b border-border bg-surface px-2 py-1 text-xs font-medium" style={{ color: p.color }}>
-                {p.name}
-              </div>
-              <div
-                className="relative cursor-pointer"
-                style={{ height: TOTAL_MIN * PX_PER_MIN }}
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const minutes = Math.round(((e.clientY - rect.top) / PX_PER_MIN) / 15) * 15;
-                  const clicked = new Date(date);
-                  clicked.setHours(DAY_START_HOUR, 0, 0, 0);
-                  clicked.setMinutes(clicked.getMinutes() + minutes);
-                  onSlotClick(p.id, clicked);
-                }}
-              >
-                {Array.from({ length: (DAY_END_HOUR - DAY_START_HOUR) * 2 }).map((_, i) => (
-                  <div key={i} className="absolute left-0 right-0 border-t border-border/60" style={{ top: i * 30 * PX_PER_MIN }} />
-                ))}
-                {isSameDay(date, new Date()) && <NowLine />}
-                {dayAppts.map((appt) => (
-                  <AppointmentBlock key={appt.id} appt={appt} onClick={() => onAppointmentClick(appt)} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        {practitioners.map((p) => (
+          <PractitionerDayColumn
+            key={p.id}
+            date={date}
+            practitioner={p}
+            appointments={appointments}
+            onSlotClick={onSlotClick}
+            onAppointmentClick={onAppointmentClick}
+            onAppointmentDrop={onAppointmentDrop}
+          />
+        ))}
         {practitioners.length === 0 && <p className="p-4 text-sm text-slate-500">Sélectionnez au moins un praticien.</p>}
       </div>
     </div>
   );
 }
 
+/**
+ * Vue semaine multi-praticiens : 7 colonnes (jours), chaque colonne subdivisée en une
+ * sous-colonne par praticien sélectionné (grille croisée jour × praticien).
+ */
 export function WeekGrid({
   weekStart,
-  practitioner,
+  practitioners,
   appointments,
   onSlotClick,
   onAppointmentClick,
+  onAppointmentDrop,
 }: {
   weekStart: Date;
-  practitioner: AgendaPractitioner;
+  practitioners: AgendaPractitioner[];
   appointments: AgendaAppointment[];
   onSlotClick: (practitionerId: string, date: Date) => void;
   onAppointmentClick: (appt: AgendaAppointment) => void;
+  onAppointmentDrop: (appointmentId: string, practitionerId: string, newStart: Date) => void;
 }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(weekStart, { weekStartsOn: 1 }), i));
 
@@ -137,36 +199,28 @@ export function WeekGrid({
     <div className="flex">
       <HourRuler />
       <div className="relative flex flex-1" style={{ height: TOTAL_MIN * PX_PER_MIN }}>
-        {days.map((day) => {
-          const dayAppts = appointments.filter((a) => a.practitionerId === practitioner.id && isSameDay(new Date(a.start), day));
-          return (
-            <div key={day.toISOString()} className="relative flex-1 border-l border-border">
-              <div className="sticky top-0 z-20 border-b border-border bg-surface px-2 py-1 text-center text-xs font-medium capitalize">
-                {format(day, "EEE d", { locale: fr })}
-              </div>
-              <div
-                className="relative cursor-pointer"
-                style={{ height: TOTAL_MIN * PX_PER_MIN }}
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const minutes = Math.round(((e.clientY - rect.top) / PX_PER_MIN) / 15) * 15;
-                  const clicked = new Date(day);
-                  clicked.setHours(DAY_START_HOUR, 0, 0, 0);
-                  clicked.setMinutes(clicked.getMinutes() + minutes);
-                  onSlotClick(practitioner.id, clicked);
-                }}
-              >
-                {Array.from({ length: (DAY_END_HOUR - DAY_START_HOUR) * 2 }).map((_, i) => (
-                  <div key={i} className="absolute left-0 right-0 border-t border-border/60" style={{ top: i * 30 * PX_PER_MIN }} />
-                ))}
-                {isSameDay(day, new Date()) && <NowLine />}
-                {dayAppts.map((appt) => (
-                  <AppointmentBlock key={appt.id} appt={appt} onClick={() => onAppointmentClick(appt)} />
-                ))}
-              </div>
+        {days.map((day) => (
+          <div key={day.toISOString()} className="flex flex-1 flex-col border-l border-border">
+            <div className="sticky top-0 z-20 border-b border-border bg-surface px-2 py-1 text-center text-xs font-medium capitalize">
+              {format(day, "EEE d", { locale: fr })}
             </div>
-          );
-        })}
+            <div className="flex flex-1">
+              {practitioners.map((p) => (
+                <PractitionerDayColumn
+                  key={p.id}
+                  date={day}
+                  practitioner={p}
+                  appointments={appointments}
+                  onSlotClick={onSlotClick}
+                  onAppointmentClick={onAppointmentClick}
+                  onAppointmentDrop={onAppointmentDrop}
+                  compact
+                />
+              ))}
+              {practitioners.length === 0 && <div className="flex-1" />}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

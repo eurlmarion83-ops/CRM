@@ -19,6 +19,7 @@ import { MonthGrid } from "./month-grid";
 import { ListView } from "./list-view";
 import { NewAppointmentModal, AppointmentDetailModal } from "./appointment-modal";
 import { FindSlotModal } from "./find-slot-modal";
+import { rescheduleAppointmentAction } from "./actions";
 import type { AgendaAppointment, AgendaMotif, AgendaPractitioner, AgendaView } from "./types";
 
 const VIEWS: { key: AgendaView; label: string }[] = [
@@ -86,8 +87,17 @@ export function AgendaClient({
     else setSelectedDate((d) => addWeeks(d, dir));
   }
 
-  const weekFocusPractitioner = practitioners.find((p) => selected.has(p.id)) ?? practitioners[0];
   const selectedPractitioners = practitioners.filter((p) => selected.has(p.id));
+
+  async function handleAppointmentDrop(appointmentId: string, _practitionerId: string, newStart: Date) {
+    try {
+      await rescheduleAppointmentAction(appointmentId, newStart.toISOString());
+      refetch();
+    } catch (err) {
+      alert(err instanceof Error && err.message === "SLOT_ALREADY_BOOKED" ? "Ce créneau est déjà occupé." : "Impossible de déplacer ce rendez-vous.");
+      refetch();
+    }
+  }
 
   const label =
     view === "mois"
@@ -142,13 +152,6 @@ export function AgendaClient({
           </div>
         </div>
 
-        {view === "semaine" && practitioners.length > 1 && (
-          <p className="mt-2 text-xs text-slate-500">
-            Vue semaine centrée sur <strong>{weekFocusPractitioner?.name}</strong>. Cochez un seul praticien pour changer le focus,
-            ou utilisez la vue Jour pour comparer plusieurs agendas côte à côte.
-          </p>
-        )}
-
         <div className="mt-4 overflow-x-auto">
           {loading && <p className="mb-2 text-xs text-slate-400">Chargement…</p>}
           {view === "mois" && (
@@ -161,15 +164,17 @@ export function AgendaClient({
               appointments={appointments}
               onSlotClick={(practitionerId, date) => setNewAppt({ practitionerId, start: date })}
               onAppointmentClick={setViewAppt}
+              onAppointmentDrop={handleAppointmentDrop}
             />
           )}
-          {view === "semaine" && weekFocusPractitioner && (
+          {view === "semaine" && (
             <WeekGrid
               weekStart={selectedDate}
-              practitioner={weekFocusPractitioner}
+              practitioners={selectedPractitioners}
               appointments={appointments}
               onSlotClick={(practitionerId, date) => setNewAppt({ practitionerId, start: date })}
               onAppointmentClick={setViewAppt}
+              onAppointmentDrop={handleAppointmentDrop}
             />
           )}
           {view === "liste" && <ListView appointments={appointments} onAppointmentClick={setViewAppt} />}

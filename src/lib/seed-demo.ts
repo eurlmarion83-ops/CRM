@@ -19,8 +19,19 @@ export const DEMO_ACCOUNTS = [
  * route protégée `/api/setup/seed-demo` (déploiement cloud sans accès local à la base).
  */
 export async function seedDemoData() {
+  // Ordre de suppression contraint par les clés étrangères (les relations sans onDelete:Cascade
+  // — ex. l'auteur d'un message — bloquent la suppression de l'utilisateur tant que la ligne
+  // qui le référence existe encore).
   await prisma.reminderLog.deleteMany();
   await prisma.teleconsultation.deleteMany();
+  await prisma.payment.deleteMany();
+  await prisma.documentMedical.deleteMany();
+  await prisma.tache.deleteMany();
+  await prisma.messagePatient.deleteMany();
+  await prisma.conversationPatient.deleteMany();
+  await prisma.messageInterne.deleteMany();
+  await prisma.conversationMember.deleteMany();
+  await prisma.conversation.deleteMany();
   await prisma.rendezVous.deleteMany();
   await prisma.availabilityMotif.deleteMany();
   await prisma.availability.deleteMany();
@@ -28,6 +39,8 @@ export async function seedDemoData() {
   await prisma.motif.deleteMany();
   await prisma.secretaryAssignment.deleteMany();
   await prisma.patient.deleteMany();
+  await prisma.relance.deleteMany();
+  await prisma.facture.deleteMany();
   await prisma.devis.deleteMany();
   await prisma.quota.deleteMany();
   await prisma.practitioner.deleteMany();
