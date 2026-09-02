@@ -3,7 +3,10 @@
 Plateforme complète pour cabinets médicaux et télé-secrétariat : prise de rendez-vous en ligne,
 téléconsultation vidéo, CRM commercial, messagerie interne et patient, tâches, documents
 médicaux, paiement en ligne, 2FA. Couvre les Blocs 1 à 4 du cahier des charges avec des
-fonctionnalités réellement implémentées (pas de simples stubs — voir le détail plus bas).
+fonctionnalités réellement implémentées (pas de simples stubs — voir le détail plus bas), plus des
+extensions inspirées de Doctolib/Inozis : cabinets multi-tenant en self-service, avis patients,
+liste d'attente, pipeline commercial CRM et pièces jointes (voir
+[Extensions avancées](#extensions-avancées-au-delà-du-cahier-des-charges-initial)).
 Le **Bloc 5** (logiciel de gestion de cabinet réglementé : DME, prescription, SESAM-Vitale)
 reste volontairement non démarré : il déclenche des obligations réglementaires fortes (agrément
 CNDA, certification HAS) à cadrer avec un juriste santé numérique avant tout développement.
@@ -14,6 +17,7 @@ CNDA, certification HAS) à cadrer avec un juriste santé numérique avant tout 
 - [Démarrage rapide](#démarrage-rapide)
 - [Comptes de démonstration](#comptes-de-démonstration)
 - [Fonctionnalités livrées (Bloc 1)](#fonctionnalités-livrées-bloc-1)
+- [Extensions avancées (multi-cabinet, avis, liste d'attente...)](#extensions-avancées-au-delà-du-cahier-des-charges-initial)
 - [Simplifications assumées du MVP](#simplifications-assumées-du-mvp)
 - [Architecture & roadmap Blocs 2-5](#architecture--roadmap-blocs-2-5)
 - [Conformité santé — points à trancher avant mise en production](#conformité-santé--points-à-trancher-avant-mise-en-production)
@@ -81,6 +85,11 @@ Mot de passe commun : `Demo1234!` (défini dans `prisma/seed.ts`).
 Côté patient : créez un compte via `/inscription`, ou réservez directement en invité depuis
 `/recherche` → fiche praticien (aucun compte requis).
 
+Un nouveau cabinet peut aussi créer lui-même son espace via `/inscription-cabinet` (auto-service,
+sans intervention manuelle) : cela crée l'établissement, un compte administrateur, puis redirige
+vers `/equipe` pour inviter praticiens et secrétaires (mots de passe temporaires générés,
+affichés une seule fois).
+
 ## Fonctionnalités livrées
 
 ### Bloc 1 — Rendez-vous & téléconsultation
@@ -132,6 +141,32 @@ Côté patient : créez un compte via `/inscription`, ou réservez directement e
 - Fiche patient : historique des RDV, documents, fusion de doublons.
 - Génération de documents médicaux (ordonnance, certificat, compte rendu) en PDF à la demande.
 - Paiement en ligne (voir Bloc 1) et export RGPD (portabilité des données patient).
+
+### Extensions avancées (au-delà du cahier des charges initial)
+
+Ajoutées pour rapprocher la plateforme de références comme Doctolib/Inozis, en gardant la même
+rigueur (schéma migré, testé, vérifié fonctionnellement) :
+
+- **Multi-cabinet en self-service** (`/inscription-cabinet`, `/equipe`) : un cabinet crée son
+  espace seul (établissement + compte admin), puis provisionne son équipe (mots de passe
+  temporaires à usage unique). Isolation stricte des données entre cabinets (`establishmentId`
+  sur `User`/`Patient`, testée dans `tests/tenancy.test.ts`).
+- **Avis patients** (`/avis` côté cabinet, note + commentaire sur la fiche praticien) : un patient
+  laisse un avis après un RDV honoré ; modération (masquer/republier) côté cabinet.
+- **Recherche avancée** (`/recherche`) : prochain créneau disponible affiché par praticien
+  (calculé sur 14 jours, tous motifs réservables confondus), filtre "téléconsultation
+  uniquement", tri par disponibilité ou par note moyenne.
+- **Liste d'attente** (`/liste-attente` côté cabinet, section dédiée sur `/mes-rendez-vous` côté
+  patient) : un patient s'inscrit quand aucun créneau ne lui convient ; notification automatique
+  (SMS/email) dès qu'un RDV compatible est annulé, ou notification manuelle par le cabinet
+  (`src/lib/waitlist.ts`).
+- **CRM : pipeline prospects + tickets SAV** (`/crm`) : suivi commercial des cabinets démarchés
+  (Kanban Nouveau → Contacté → Qualifié → Gagné/Perdu) et tickets de support (priorité, statut
+  Ouvert → En cours → Résolu).
+- **Pièces jointes & photo de profil** : image ou PDF joint aux messages (messagerie interne,
+  messagerie patients, `/mes-messages`), 5 Mo max, stocké en base64 (`src/lib/attachments.ts`) ;
+  photo de profil praticien (`/parametres/profil`, 2 Mo max) affichée sur la fiche publique et
+  dans les résultats de recherche.
 
 ### Sécurité & qualité
 - 2FA (TOTP) optionnelle pour les comptes professionnels (`/parametres/securite`).
