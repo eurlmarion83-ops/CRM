@@ -19,6 +19,12 @@ export default function ConnexionPage() {
               Créer un compte
             </Link>
           </p>
+          <p>
+            Vous êtes un professionnel de santé et n&apos;avez pas encore de cabinet sur MedCRM ?{" "}
+            <Link href="/inscription-cabinet" className="text-brand-dark underline">
+              Créer votre espace cabinet
+            </Link>
+          </p>
           <p className="rounded-lg bg-brand-light p-3 text-xs leading-relaxed">
             Démo : voir <code>README.md</code> pour les comptes de démonstration
             (praticien, secrétaire, admin, patient).

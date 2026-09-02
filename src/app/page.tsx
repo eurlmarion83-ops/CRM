@@ -10,11 +10,14 @@ export default function HomePage() {
             <Link href="/recherche" className="hover:text-brand-dark">
               Trouver un praticien
             </Link>
+            <Link href="/connexion" className="hover:text-brand-dark">
+              Connexion
+            </Link>
             <Link
-              href="/connexion"
+              href="/inscription-cabinet"
               className="rounded-full bg-brand px-4 py-2 text-white hover:bg-brand-dark"
             >
-              Espace professionnel
+              Créer mon cabinet
             </Link>
           </nav>
         </div>
@@ -37,10 +40,10 @@ export default function HomePage() {
             Prendre rendez-vous
           </Link>
           <Link
-            href="/connexion"
+            href="/inscription-cabinet"
             className="rounded-full border border-border bg-surface px-6 py-3 font-medium hover:bg-brand-light"
           >
-            Se connecter (praticien / secrétariat)
+            Je suis un professionnel de santé →
           </Link>
         </div>
       </section>
