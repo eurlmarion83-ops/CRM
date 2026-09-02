@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import type { Role } from "@/lib/enums";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Vercel (et tout hébergeur derrière un proxy de confiance qui fixe le Host correctement)
+  // a besoin de trustHost : sans cela, NextAuth v5 rejette les requêtes en production tant que
+  // AUTH_URL n'est pas strictement identique au domaine réel.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: { signIn: "/connexion" },
   providers: [

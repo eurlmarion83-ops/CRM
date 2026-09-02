@@ -30,6 +30,9 @@ export default async function MesRendezVousPage() {
             <Link href="/recherche" className="hover:text-brand-dark">
               Prendre un nouveau RDV
             </Link>
+            <Link href="/mes-messages" className="hover:text-brand-dark">
+              Messagerie
+            </Link>
             <form
               action={async () => {
                 "use server";
