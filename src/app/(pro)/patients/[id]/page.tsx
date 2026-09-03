@@ -37,9 +37,15 @@ export default async function PatientDetailPage({ params }: { params: Promise<{ 
         ← Retour aux patients
       </Link>
       <div className="mt-2 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">
-          {patient.firstName} {patient.lastName}
-        </h1>
+        <div className="flex items-center gap-3">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-light text-base font-semibold text-brand-dark">
+            {patient.firstName[0]}
+            {patient.lastName[0]}
+          </span>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            {patient.firstName} {patient.lastName}
+          </h1>
+        </div>
         <MergeForm patientId={patient.id} />
       </div>
       <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
@@ -64,12 +70,23 @@ export default async function PatientDetailPage({ params }: { params: Promise<{ 
           <h2 className="font-semibold text-slate-900">Historique des rendez-vous</h2>
           <div className="mt-2 flex flex-col gap-2">
             {patient.appointments.map((a) => (
-              <div key={a.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-                <span>
+              <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: a.motif.color }} />
+                <span className="flex-1">
                   {a.start.toLocaleDateString("fr-FR")} — {a.motif.name} ({a.practitioner.user.firstName}{" "}
                   {a.practitioner.user.lastName})
                 </span>
-                <span className="text-xs text-slate-500">{a.status}</span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                    a.status === "CONFIRMED"
+                      ? "bg-brand-light text-brand-dark"
+                      : a.status === "NO_SHOW"
+                        ? "bg-danger/10 text-danger"
+                        : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {a.status}
+                </span>
               </div>
             ))}
             {patient.appointments.length === 0 && <p className="text-sm text-slate-500">Aucun rendez-vous.</p>}
@@ -82,7 +99,10 @@ export default async function PatientDetailPage({ params }: { params: Promise<{ 
             {patient.documents.map((d) => (
               <div key={d.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
                 <span>
-                  {TYPE_LABELS[d.type] ?? d.type} — {d.title} ({d.createdAt.toLocaleDateString("fr-FR")})
+                  <span className="rounded-full bg-brand-light px-2 py-0.5 text-xs font-medium text-brand-dark">
+                    {TYPE_LABELS[d.type] ?? d.type}
+                  </span>{" "}
+                  {d.title} ({d.createdAt.toLocaleDateString("fr-FR")})
                 </span>
                 <a href={`/api/documents/${d.id}/pdf`} className="text-xs text-brand-dark underline">
                   Télécharger le PDF

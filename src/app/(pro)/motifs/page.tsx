@@ -73,6 +73,10 @@ export default async function MotifsPage({
                   <input type="checkbox" name="active" defaultChecked={m.active} />
                   Actif
                 </label>
+                {!m.active && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Inactif</span>}
+                {m.onlineBookable && m.active && (
+                  <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">En ligne</span>
+                )}
                 <label className="flex items-center gap-1 text-xs">
                   Prix (€)
                   <input

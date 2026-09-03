@@ -53,13 +53,33 @@ export default async function DisponibilitesPage({
         <>
           <section className="mt-6">
             <h2 className="font-semibold text-slate-900">Plages hebdomadaires récurrentes</h2>
-            <div className="mt-2 flex flex-col gap-2">
+            <div className="mt-3 flex gap-1">
+              {DAYS_OF_WEEK.map((d, i) => {
+                const covered = availabilities.some((a) => a.dayOfWeek === i);
+                return (
+                  <div key={d} className="flex flex-1 flex-col items-center gap-1">
+                    <span
+                      className={`h-2 w-full rounded-full ${covered ? "bg-brand" : "bg-slate-100"}`}
+                      title={covered ? `${d} : couvert` : `${d} : aucune plage`}
+                    />
+                    <span className="text-[10px] text-slate-500">{d.slice(0, 3)}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
               {availabilities.map((a) => (
                 <form key={a.id} action={deleteAvailabilityAction} className="card flex items-center justify-between p-3 text-sm">
                   <input type="hidden" name="availabilityId" value={a.id} />
-                  <span>
-                    <strong>{DAYS_OF_WEEK[a.dayOfWeek]}</strong> · {a.startTime}–{a.endTime} · créneaux {a.slotDurationMin} min ·{" "}
-                    {a.visibility === "PUBLIC" ? "Visible patient" : "Interne (secrétariat/praticien uniquement)"}
+                  <span className="flex items-center gap-2">
+                    <strong>{DAYS_OF_WEEK[a.dayOfWeek]}</strong> · {a.startTime}–{a.endTime} · créneaux {a.slotDurationMin} min
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        a.visibility === "PUBLIC" ? "bg-brand-light text-brand-dark" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {a.visibility === "PUBLIC" ? "Visible patient" : "Interne"}
+                    </span>
                   </span>
                   <button className="rounded-full border border-danger px-3 py-1 text-xs text-danger hover:bg-danger hover:text-white">
                     Supprimer
@@ -125,7 +145,10 @@ export default async function DisponibilitesPage({
               {timeOffs.map((t) => (
                 <form key={t.id} action={deleteTimeOffAction} className="card flex items-center justify-between p-3 text-sm">
                   <input type="hidden" name="timeOffId" value={t.id} />
-                  <span>
+                  <span className="flex items-center gap-2">
+                    {t.end < new Date() && (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Passé</span>
+                    )}
                     {t.start.toLocaleString("fr-FR")} → {t.end.toLocaleString("fr-FR")} {t.reason ? `(${t.reason})` : ""}
                   </span>
                   <button className="rounded-full border border-danger px-3 py-1 text-xs text-danger hover:bg-danger hover:text-white">
