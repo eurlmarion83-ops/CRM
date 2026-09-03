@@ -4,6 +4,7 @@ import { signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PatientQuickSearch } from "@/components/patient-quick-search";
+import { NotificationBell } from "@/components/notification-bell";
 import { getCurrentEstablishmentId, getVisiblePractitioners } from "@/lib/agenda-data";
 import { ROLE_LABELS, type Role } from "@/lib/enums";
 
@@ -33,14 +34,17 @@ export default async function ProLayout({ children }: { children: React.ReactNod
     getVisiblePractitioners(user),
   ]);
   const practitionerIds = visiblePractitioners.map((p) => p.id);
-  const pendingPatientMessages = await prisma.conversationPatient.count({
-    where: {
-      statut: "A_TRAITER",
-      patient: {
-        OR: [...(establishmentId ? [{ establishmentId }] : []), { appointments: { some: { practitionerId: { in: practitionerIds } } } }],
+  const [pendingPatientMessages, openTicketCount] = await Promise.all([
+    prisma.conversationPatient.count({
+      where: {
+        statut: "A_TRAITER",
+        patient: {
+          OR: [...(establishmentId ? [{ establishmentId }] : []), { appointments: { some: { practitionerId: { in: practitionerIds } } } }],
+        },
       },
-    },
-  });
+    }),
+    prisma.ticket.count({ where: { statut: { in: ["OUVERT", "EN_COURS"] } } }),
+  ]);
 
   return (
     <div className="flex min-h-full flex-1">
@@ -82,8 +86,15 @@ export default async function ProLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
       <div className="flex flex-1 min-w-0 flex-col">
-        <header className="flex items-center border-b border-border bg-surface px-4 py-2 sm:px-6">
+        <header className="flex items-center justify-between gap-4 border-b border-border bg-surface px-4 py-2 sm:px-6">
           <PatientQuickSearch />
+          <NotificationBell
+            items={[
+              { label: "Tâches à faire", count: pendingTaskCount, href: "/taches" },
+              { label: "Messages patients à traiter", count: pendingPatientMessages, href: "/messagerie-patients" },
+              { label: "Tickets ouverts", count: openTicketCount, href: "/crm" },
+            ]}
+          />
         </header>
         <div className="flex-1 min-w-0">{children}</div>
       </div>

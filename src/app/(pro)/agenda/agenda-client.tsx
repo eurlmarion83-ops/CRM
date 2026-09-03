@@ -164,7 +164,7 @@ export function AgendaClient({
         <div className="mt-4 overflow-x-auto">
           {loading && <p className="mb-2 text-xs text-slate-400">Chargement…</p>}
           {view === "mois" && (
-            <MonthGrid month={selectedDate} appointments={appointments} practitioners={practitioners} onDayClick={(d) => { setSelectedDate(d); setView("jour"); }} />
+            <MonthGrid month={selectedDate} appointments={appointments} practitioners={practitioners} timeOffs={timeOffs} onDayClick={(d) => { setSelectedDate(d); setView("jour"); }} />
           )}
           {view === "jour" && (
             <DayGrid

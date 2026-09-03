@@ -8,19 +8,22 @@ import {
   eachDayOfInterval,
   isSameMonth,
   isSameDay,
+  addDays,
   format,
 } from "date-fns";
-import type { AgendaAppointment, AgendaPractitioner } from "./types";
+import type { AgendaAppointment, AgendaPractitioner, AgendaTimeOff } from "./types";
 
 export function MonthGrid({
   month,
   appointments,
   practitioners,
+  timeOffs,
   onDayClick,
 }: {
   month: Date;
   appointments: AgendaAppointment[];
   practitioners: AgendaPractitioner[];
+  timeOffs: AgendaTimeOff[];
   onDayClick: (date: Date) => void;
 }) {
   const days = eachDayOfInterval({
@@ -40,6 +43,7 @@ export function MonthGrid({
         const dayAppts = appointments.filter((a) => isSameDay(new Date(a.start), day) && a.status === "CONFIRMED");
         const byPractitioner = new Map<string, number>();
         for (const a of dayAppts) byPractitioner.set(a.practitionerId, (byPractitioner.get(a.practitionerId) ?? 0) + 1);
+        const dayHasTimeOff = timeOffs.some((t) => new Date(t.start) < addDays(day, 1) && new Date(t.end) > day);
 
         return (
           <button
@@ -49,8 +53,17 @@ export function MonthGrid({
               isSameMonth(day, month) ? "" : "text-slate-300"
             }`}
           >
-            <span className={`text-xs ${isSameDay(day, new Date()) ? "rounded-full bg-brand px-1.5 py-0.5 text-white" : ""}`}>
-              {format(day, "d")}
+            <span className="flex w-full items-center justify-between">
+              <span className={`text-xs ${isSameDay(day, new Date()) ? "rounded-full bg-brand px-1.5 py-0.5 text-white" : ""}`}>
+                {format(day, "d")}
+              </span>
+              {dayHasTimeOff && (
+                <span
+                  title="Absence ce jour-là"
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: "var(--text-faint)" }}
+                />
+              )}
             </span>
             {dayAppts.length > 0 && <span className="text-[10px] font-medium text-slate-600">{dayAppts.length} RDV</span>}
             <div className="flex flex-wrap gap-1">
