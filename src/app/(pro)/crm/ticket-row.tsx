@@ -9,6 +9,12 @@ const PRIORITE_STYLES: Record<string, string> = {
   HAUTE: "text-danger font-medium",
 };
 
+const STATUT_STYLES: Record<string, string> = {
+  OUVERT: "bg-warning/10 text-warning",
+  EN_COURS: "bg-brand-light text-brand-dark",
+  RESOLU: "bg-success/10 text-success",
+};
+
 export function TicketRow({
   ticket,
 }: {
@@ -23,7 +29,9 @@ export function TicketRow({
         {ticket.description && <p className="text-xs text-slate-500">{ticket.description}</p>}
       </td>
       <td className={`py-2 ${PRIORITE_STYLES[ticket.priorite] ?? ""}`}>{ticket.priorite}</td>
-      <td className="py-2">{ticket.statut}</td>
+      <td className="py-2">
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUT_STYLES[ticket.statut] ?? ""}`}>{ticket.statut}</span>
+      </td>
       <td className="py-2 text-slate-500">{ticket.createdAt}</td>
       <td className="py-2 flex gap-1">
         <button

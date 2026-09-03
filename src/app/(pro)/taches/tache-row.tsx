@@ -23,6 +23,7 @@ export function TacheRow({
   };
 }) {
   const [isPending, startTransition] = useTransition();
+  const enRetard = tache.statut !== "FAIT" && !!tache.echeance && tache.echeance < new Date();
 
   return (
     <div className={`card flex items-start gap-3 p-3 text-sm ${tache.statut === "FAIT" ? "opacity-50" : ""}`}>
@@ -41,7 +42,12 @@ export function TacheRow({
         {tache.description && <p className="text-slate-600">{tache.description}</p>}
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <span className={`rounded-full px-2 py-0.5 ${PRIORITY_COLOR[tache.priorite]}`}>{tache.priorite}</span>
-          {tache.echeance && <span>Échéance : {tache.echeance.toLocaleDateString("fr-FR")}</span>}
+          {tache.echeance && (
+            <span className={enRetard ? "font-medium text-danger" : ""}>
+              Échéance : {tache.echeance.toLocaleDateString("fr-FR")}
+              {enRetard ? " (en retard)" : ""}
+            </span>
+          )}
           {tache.assigneNom && <span>Assigné à {tache.assigneNom}</span>}
         </div>
       </div>

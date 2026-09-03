@@ -24,10 +24,19 @@ export default async function MessagerieListPage() {
         {conversations.map((c) => {
           const others = c.members.filter((m) => m.userId !== user.id).map((m) => `${m.user.firstName} ${m.user.lastName}`);
           const label = c.name || others.join(", ") || "Conversation";
+          const lastMessage = c.messages[0];
           return (
-            <Link key={c.id} href={`/messagerie/${c.id}`} className="card flex items-center justify-between p-3 hover:border-brand">
-              <span className="font-medium text-slate-900">{label}</span>
-              <span className="max-w-[50%] truncate text-sm text-slate-500">{c.messages[0]?.content ?? "Aucun message"}</span>
+            <Link key={c.id} href={`/messagerie/${c.id}`} className="card flex items-center gap-3 p-3 hover:border-brand">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-light text-xs font-semibold text-brand-dark">
+                {c.isGroup ? "👥" : (label[0] ?? "?").toUpperCase()}
+              </span>
+              <span className="flex-1 font-medium text-slate-900">{label}</span>
+              <span className="max-w-[40%] truncate text-sm text-slate-500">
+                {lastMessage?.content || (lastMessage ? "📎 Pièce jointe" : "Aucun message")}
+              </span>
+              {lastMessage && (
+                <span className="shrink-0 text-xs text-slate-400">{lastMessage.createdAt.toLocaleDateString("fr-FR")}</span>
+              )}
             </Link>
           );
         })}

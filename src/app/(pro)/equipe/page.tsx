@@ -44,8 +44,15 @@ export default async function EquipePage({
           <h2 className="mb-2 text-sm font-semibold uppercase text-slate-500">Praticiens</h2>
           <div className="flex flex-col gap-2">
             {practitioners.map((p) => (
-              <div key={p.id} className="card flex items-center justify-between p-3 text-sm">
-                <span>
+              <div key={p.id} className="card flex items-center gap-3 p-3 text-sm">
+                <span
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                  style={{ backgroundColor: p.color }}
+                >
+                  {p.user.firstName[0]}
+                  {p.user.lastName[0]}
+                </span>
+                <span className="flex-1">
                   {p.user.firstName} {p.user.lastName} — {p.specialty}
                 </span>
                 <span className="text-xs text-slate-500">{p.user.email}</span>
@@ -62,11 +69,17 @@ export default async function EquipePage({
           <h2 className="mb-2 text-sm font-semibold uppercase text-slate-500">Secrétariat</h2>
           <div className="flex flex-col gap-2">
             {[...secretariesById.values()].map((s) => (
-              <div key={s.user.email} className="card p-3 text-sm">
-                <p className="font-medium">
-                  {s.user.firstName} {s.user.lastName} <span className="text-xs font-normal text-slate-500">({ROLE_LABELS.SECRETARY})</span>
-                </p>
-                <p className="text-xs text-slate-500">Gère : {s.practitioners.join(", ")}</p>
+              <div key={s.user.email} className="card flex items-center gap-3 p-3 text-sm">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-light text-xs font-semibold text-brand-dark">
+                  {s.user.firstName[0]}
+                  {s.user.lastName[0]}
+                </span>
+                <div>
+                  <p className="font-medium">
+                    {s.user.firstName} {s.user.lastName} <span className="text-xs font-normal text-slate-500">({ROLE_LABELS.SECRETARY})</span>
+                  </p>
+                  <p className="text-xs text-slate-500">Gère : {s.practitioners.join(", ")}</p>
+                </div>
               </div>
             ))}
             {secretariesById.size === 0 && <p className="text-sm text-slate-500">Aucune secrétaire pour le moment.</p>}

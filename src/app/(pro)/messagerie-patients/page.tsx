@@ -39,13 +39,19 @@ export default async function MessagerieePatientsPage() {
           <Link
             key={c.id}
             href={`/messagerie-patients/${c.id}`}
-            className="card flex items-center justify-between p-3 hover:border-brand"
+            className="card flex items-center gap-3 p-3 hover:border-brand"
           >
-            <div>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-light text-xs font-semibold text-brand-dark">
+              {c.patient.firstName[0]}
+              {c.patient.lastName[0]}
+            </span>
+            <div className="flex-1">
               <p className="font-medium text-slate-900">
                 {c.patient.firstName} {c.patient.lastName}
               </p>
-              <p className="max-w-md truncate text-sm text-slate-500">{c.messages[0]?.content ?? "Aucun message"}</p>
+              <p className="max-w-md truncate text-sm text-slate-500">
+                {c.messages[0]?.content || (c.messages[0] ? "📎 Pièce jointe" : "Aucun message")}
+              </p>
             </div>
             <div className="flex items-center gap-2 text-xs">
               {c.assignedPractitioner && (

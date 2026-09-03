@@ -21,6 +21,10 @@ export default async function TachesPage({
     prisma.user.findMany({ where: { role: { in: ["PRACTITIONER", "SECRETARY", "ADMIN"] } } }),
   ]);
 
+  const now = new Date();
+  const aFaireCount = taches.filter((t) => t.statut !== "FAIT").length;
+  const enRetardCount = taches.filter((t) => t.statut !== "FAIT" && t.echeance && t.echeance < now).length;
+
   return (
     <main className="px-6 py-8">
       <div className="flex items-center justify-between">
@@ -37,6 +41,17 @@ export default async function TachesPage({
       <p className="text-slate-600">
         Tâches manuelles et auto-générées (no-show à rappeler, devis à relancer).
       </p>
+
+      <div className="mt-4 flex flex-wrap gap-3 text-sm">
+        <span className="rounded-full border border-border px-3 py-1.5">
+          <strong>{aFaireCount}</strong> à faire
+        </span>
+        {enRetardCount > 0 && (
+          <span className="rounded-full bg-danger/10 px-3 py-1.5 text-danger">
+            <strong>{enRetardCount}</strong> en retard
+          </span>
+        )}
+      </div>
 
       <div className="mt-6 flex flex-col gap-2">
         {taches.map((t) => (
