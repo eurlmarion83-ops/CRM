@@ -1,11 +1,82 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useActionState } from "react";
 import { createAppointmentAction, cancelAppointmentStaffAction, rescheduleAppointmentAction } from "./actions";
 import type { AgendaAppointment, AgendaMotif, AgendaPractitioner } from "./types";
 
 type PatientHit = { id: string; name: string; phone: string | null; email: string | null };
+
+function MotifPicker({
+  motifs,
+  selected,
+  onSelect,
+}: {
+  motifs: AgendaMotif[];
+  selected?: AgendaMotif;
+  onSelect: (motifId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const filtered = motifs.filter((m) => m.name.toLowerCase().includes(query.toLowerCase()));
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left"
+      >
+        {selected && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: selected.color }} />}
+        <span className="flex-1 truncate">
+          {selected ? `${selected.name} (${selected.durationMin} min)` : "Sélectionner un motif"}
+        </span>
+        <span className="text-slate-400">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher un motif..."
+            className="w-full border-b border-border px-3 py-2 text-sm"
+          />
+          <div className="max-h-56 overflow-y-auto">
+            {filtered.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  onSelect(m.id);
+                  setOpen(false);
+                  setQuery("");
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-brand-light"
+              >
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: m.color }} />
+                <span className="flex-1 truncate">{m.name}</span>
+                <span className="shrink-0 text-xs text-slate-500">
+                  {m.durationMin} min{m.type === "VIDEO" ? " 🎥" : ""}
+                </span>
+              </button>
+            ))}
+            {filtered.length === 0 && <p className="px-3 py-2 text-sm text-slate-500">Aucun motif trouvé.</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function NewAppointmentModal({
   practitioner,
@@ -25,6 +96,7 @@ export function NewAppointmentModal({
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<PatientHit[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<PatientHit | null>(null);
+  const selectedMotif = motifs.find((m) => m.id === motifId);
 
   useEffect(() => {
     if (state?.success) onClose();
@@ -56,20 +128,10 @@ export function NewAppointmentModal({
           {start.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
         </p>
 
+        <input type="hidden" name="motifId" value={motifId} />
         <label className="flex flex-col gap-1 text-sm">
           Motif
-          <select
-            name="motifId"
-            value={motifId}
-            onChange={(e) => setMotifId(e.target.value)}
-            className="rounded-lg border border-border px-3 py-2"
-          >
-            {motifs.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({m.durationMin} min)
-              </option>
-            ))}
-          </select>
+          <MotifPicker motifs={motifs} selected={selectedMotif} onSelect={setMotifId} />
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
