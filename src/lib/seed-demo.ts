@@ -42,6 +42,8 @@ export async function seedDemoData() {
   await prisma.relance.deleteMany();
   await prisma.facture.deleteMany();
   await prisma.devis.deleteMany();
+  await prisma.ticket.deleteMany();
+  await prisma.suiviProspect.deleteMany();
   await prisma.quota.deleteMany();
   await prisma.practitioner.deleteMany();
   await prisma.secretaryProfile.deleteMany();
