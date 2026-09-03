@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/require-user";
 import { signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { PatientQuickSearch } from "@/components/patient-quick-search";
+import { getCurrentEstablishmentId, getVisiblePractitioners } from "@/lib/agenda-data";
 import { ROLE_LABELS, type Role } from "@/lib/enums";
 
 const NAV: { href: string; label: string; roles: Role[] }[] = [
@@ -25,7 +27,20 @@ const NAV: { href: string; label: string; roles: Role[] }[] = [
 
 export default async function ProLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser(["PRACTITIONER", "SECRETARY", "ADMIN"]);
-  const pendingTaskCount = await prisma.tache.count({ where: { assigneId: user.id, statut: { not: "FAIT" } } });
+  const [pendingTaskCount, establishmentId, visiblePractitioners] = await Promise.all([
+    prisma.tache.count({ where: { assigneId: user.id, statut: { not: "FAIT" } } }),
+    getCurrentEstablishmentId(user),
+    getVisiblePractitioners(user),
+  ]);
+  const practitionerIds = visiblePractitioners.map((p) => p.id);
+  const pendingPatientMessages = await prisma.conversationPatient.count({
+    where: {
+      statut: "A_TRAITER",
+      patient: {
+        OR: [...(establishmentId ? [{ establishmentId }] : []), { appointments: { some: { practitionerId: { in: practitionerIds } } } }],
+      },
+    },
+  });
 
   return (
     <div className="flex min-h-full flex-1">
@@ -43,6 +58,9 @@ export default async function ProLayout({ children }: { children: React.ReactNod
               {item.label}
               {item.href === "/taches" && pendingTaskCount > 0 && (
                 <span className="rounded-full bg-brand px-2 py-0.5 text-xs text-white">{pendingTaskCount}</span>
+              )}
+              {item.href === "/messagerie-patients" && pendingPatientMessages > 0 && (
+                <span className="rounded-full bg-warning px-2 py-0.5 text-xs text-white">{pendingPatientMessages}</span>
               )}
             </Link>
           ))}
@@ -63,7 +81,12 @@ export default async function ProLayout({ children }: { children: React.ReactNod
           </form>
         </div>
       </aside>
-      <div className="flex-1 min-w-0">{children}</div>
+      <div className="flex flex-1 min-w-0 flex-col">
+        <header className="flex items-center border-b border-border bg-surface px-4 py-2 sm:px-6">
+          <PatientQuickSearch />
+        </header>
+        <div className="flex-1 min-w-0">{children}</div>
+      </div>
     </div>
   );
 }

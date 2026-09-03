@@ -16,6 +16,14 @@ export type AgendaAppointment = {
 
 export type AgendaPractitioner = { id: string; name: string; color: string };
 
+export type AgendaTimeOff = {
+  id: string;
+  practitionerId: string;
+  start: string;
+  end: string;
+  reason: string | null;
+};
+
 export type AgendaMotif = {
   id: string;
   practitionerId: string;

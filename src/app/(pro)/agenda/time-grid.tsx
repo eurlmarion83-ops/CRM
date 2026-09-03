@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { addDays, format, isSameDay, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
-import type { AgendaAppointment, AgendaPractitioner } from "./types";
+import type { AgendaAppointment, AgendaPractitioner, AgendaTimeOff } from "./types";
 
 const DAY_START_HOUR = 7;
 const DAY_END_HOUR = 20;
@@ -61,6 +61,32 @@ function AppointmentBlock({ appt, onClick }: { appt: AgendaAppointment; onClick:
   );
 }
 
+function TimeOffBlock({ timeOff, date }: { timeOff: AgendaTimeOff; date: Date }) {
+  const rawStart = new Date(timeOff.start);
+  const rawEnd = new Date(timeOff.end);
+  const dayStart = new Date(date);
+  dayStart.setHours(DAY_START_HOUR, 0, 0, 0);
+  const dayEnd = new Date(date);
+  dayEnd.setHours(DAY_END_HOUR, 0, 0, 0);
+
+  const start = rawStart < dayStart ? dayStart : rawStart;
+  const end = rawEnd > dayEnd ? dayEnd : rawEnd;
+  if (end <= start) return null;
+
+  const top = Math.max(0, minutesFromDayStart(start)) * PX_PER_MIN;
+  const height = Math.max(16, (end.getTime() - start.getTime()) / 60000) * PX_PER_MIN;
+
+  return (
+    <div
+      className="absolute left-0 right-0 overflow-hidden border-y px-1.5 py-0.5 text-[11px]"
+      style={{ top, height, backgroundColor: "var(--border)", borderColor: "var(--border)", color: "var(--text-muted)" }}
+      title={timeOff.reason ?? "Absence"}
+    >
+      {timeOff.reason ? `Absence — ${timeOff.reason}` : "Absence"} {format(start, "HH:mm")}
+    </div>
+  );
+}
+
 function HourRuler() {
   const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, i) => DAY_START_HOUR + i);
   return (
@@ -79,6 +105,7 @@ function PractitionerDayColumn({
   date,
   practitioner,
   appointments,
+  timeOffs,
   onSlotClick,
   onAppointmentClick,
   onAppointmentDrop,
@@ -87,12 +114,16 @@ function PractitionerDayColumn({
   date: Date;
   practitioner: AgendaPractitioner;
   appointments: AgendaAppointment[];
+  timeOffs: AgendaTimeOff[];
   onSlotClick: (practitionerId: string, date: Date) => void;
   onAppointmentClick: (appt: AgendaAppointment) => void;
   onAppointmentDrop: (appointmentId: string, practitionerId: string, newStart: Date) => void;
   compact?: boolean;
 }) {
   const dayAppts = appointments.filter((a) => a.practitionerId === practitioner.id && isSameDay(new Date(a.start), date));
+  const dayTimeOffs = timeOffs.filter(
+    (t) => t.practitionerId === practitioner.id && new Date(t.start) < addDays(date, 1) && new Date(t.end) > date
+  );
 
   return (
     <div className="relative flex-1 border-l border-border">
@@ -130,6 +161,9 @@ function PractitionerDayColumn({
           <div key={i} className="absolute left-0 right-0 border-t border-border/60" style={{ top: i * 30 * PX_PER_MIN }} />
         ))}
         {isSameDay(date, new Date()) && <NowLine />}
+        {dayTimeOffs.map((t) => (
+          <TimeOffBlock key={t.id} timeOff={t} date={date} />
+        ))}
         {dayAppts.map((appt) => (
           <AppointmentBlock key={appt.id} appt={appt} onClick={() => onAppointmentClick(appt)} />
         ))}
@@ -142,6 +176,7 @@ export function DayGrid({
   date,
   practitioners,
   appointments,
+  timeOffs,
   onSlotClick,
   onAppointmentClick,
   onAppointmentDrop,
@@ -149,6 +184,7 @@ export function DayGrid({
   date: Date;
   practitioners: AgendaPractitioner[];
   appointments: AgendaAppointment[];
+  timeOffs: AgendaTimeOff[];
   onSlotClick: (practitionerId: string, date: Date) => void;
   onAppointmentClick: (appt: AgendaAppointment) => void;
   onAppointmentDrop: (appointmentId: string, practitionerId: string, newStart: Date) => void;
@@ -163,6 +199,7 @@ export function DayGrid({
             date={date}
             practitioner={p}
             appointments={appointments}
+            timeOffs={timeOffs}
             onSlotClick={onSlotClick}
             onAppointmentClick={onAppointmentClick}
             onAppointmentDrop={onAppointmentDrop}
@@ -182,6 +219,7 @@ export function WeekGrid({
   weekStart,
   practitioners,
   appointments,
+  timeOffs,
   onSlotClick,
   onAppointmentClick,
   onAppointmentDrop,
@@ -189,6 +227,7 @@ export function WeekGrid({
   weekStart: Date;
   practitioners: AgendaPractitioner[];
   appointments: AgendaAppointment[];
+  timeOffs: AgendaTimeOff[];
   onSlotClick: (practitionerId: string, date: Date) => void;
   onAppointmentClick: (appt: AgendaAppointment) => void;
   onAppointmentDrop: (appointmentId: string, practitionerId: string, newStart: Date) => void;
@@ -211,6 +250,7 @@ export function WeekGrid({
                   date={day}
                   practitioner={p}
                   appointments={appointments}
+                  timeOffs={timeOffs}
                   onSlotClick={onSlotClick}
                   onAppointmentClick={onAppointmentClick}
                   onAppointmentDrop={onAppointmentDrop}

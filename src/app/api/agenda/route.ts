@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getAgendaAppointments, getVisiblePractitioners } from "@/lib/agenda-data";
+import { getAgendaAppointments, getAgendaTimeOffs, getVisiblePractitioners } from "@/lib/agenda-data";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -17,7 +17,10 @@ export async function GET(req: NextRequest) {
   const visibleIds = new Set(visible.map((p) => p.id));
   const practitionerIds = requested.filter((id) => visibleIds.has(id));
 
-  const appointments = await getAgendaAppointments(practitionerIds, from, to);
+  const [appointments, timeOffs] = await Promise.all([
+    getAgendaAppointments(practitionerIds, from, to),
+    getAgendaTimeOffs(practitionerIds, from, to),
+  ]);
 
   return NextResponse.json({
     appointments: appointments.map((a) => ({
@@ -34,6 +37,13 @@ export async function GET(req: NextRequest) {
       motifColor: a.motif.color,
       isVideo: a.motif.type === "VIDEO",
       roomName: a.teleconsultation?.roomName ?? null,
+    })),
+    timeOffs: timeOffs.map((t) => ({
+      id: t.id,
+      practitionerId: t.practitionerId,
+      start: t.start.toISOString(),
+      end: t.end.toISOString(),
+      reason: t.reason,
     })),
   });
 }

@@ -1,7 +1,7 @@
 import { startOfWeek, endOfWeek } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
-import { getVisiblePractitioners, getAgendaAppointments } from "@/lib/agenda-data";
+import { getVisiblePractitioners, getAgendaAppointments, getAgendaTimeOffs } from "@/lib/agenda-data";
 import { AgendaClient } from "./agenda-client";
 
 export default async function AgendaPage() {
@@ -11,7 +11,10 @@ export default async function AgendaPage() {
 
   const from = startOfWeek(new Date(), { weekStartsOn: 1 });
   const to = endOfWeek(new Date(), { weekStartsOn: 1 });
-  const initialAppointments = await getAgendaAppointments(practitionerIds, from, to);
+  const [initialAppointments, initialTimeOffs] = await Promise.all([
+    getAgendaAppointments(practitionerIds, from, to),
+    getAgendaTimeOffs(practitionerIds, from, to),
+  ]);
 
   const motifsByPractitioner = await prisma.motif.findMany({
     where: { practitionerId: { in: practitionerIds }, active: true },
@@ -47,6 +50,13 @@ export default async function AgendaPage() {
         motifColor: a.motif.color,
         isVideo: a.motif.type === "VIDEO",
         roomName: a.teleconsultation?.roomName ?? null,
+      }))}
+      initialTimeOffs={initialTimeOffs.map((t) => ({
+        id: t.id,
+        practitionerId: t.practitionerId,
+        start: t.start.toISOString(),
+        end: t.end.toISOString(),
+        reason: t.reason,
       }))}
     />
   );

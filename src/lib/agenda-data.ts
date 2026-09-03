@@ -103,3 +103,16 @@ export async function getAgendaAppointments(practitionerIds: string[], from: Dat
     orderBy: { start: "asc" },
   });
 }
+
+/** Congés / absences ponctuelles à afficher en grisé dans l'agenda (façon "Absence" Doctolib). */
+export async function getAgendaTimeOffs(practitionerIds: string[], from: Date, to: Date) {
+  if (practitionerIds.length === 0) return [];
+  return prisma.timeOff.findMany({
+    where: {
+      practitionerId: { in: practitionerIds },
+      start: { lt: to },
+      end: { gt: from },
+    },
+    orderBy: { start: "asc" },
+  });
+}

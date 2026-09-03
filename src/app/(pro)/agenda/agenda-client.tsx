@@ -20,7 +20,7 @@ import { ListView } from "./list-view";
 import { NewAppointmentModal, AppointmentDetailModal } from "./appointment-modal";
 import { FindSlotModal } from "./find-slot-modal";
 import { rescheduleAppointmentAction } from "./actions";
-import type { AgendaAppointment, AgendaMotif, AgendaPractitioner, AgendaView } from "./types";
+import type { AgendaAppointment, AgendaMotif, AgendaPractitioner, AgendaTimeOff, AgendaView } from "./types";
 
 const VIEWS: { key: AgendaView; label: string }[] = [
   { key: "liste", label: "Liste" },
@@ -39,15 +39,18 @@ export function AgendaClient({
   practitioners,
   motifs,
   initialAppointments,
+  initialTimeOffs,
 }: {
   practitioners: AgendaPractitioner[];
   motifs: AgendaMotif[];
   initialAppointments: AgendaAppointment[];
+  initialTimeOffs: AgendaTimeOff[];
 }) {
   const [view, setView] = useState<AgendaView>("semaine");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selected, setSelected] = useState<Set<string>>(new Set(practitioners.map((p) => p.id)));
   const [appointments, setAppointments] = useState<AgendaAppointment[]>(initialAppointments);
+  const [timeOffs, setTimeOffs] = useState<AgendaTimeOff[]>(initialTimeOffs);
   const [loading, setLoading] = useState(false);
 
   const [newAppt, setNewAppt] = useState<{ practitionerId: string; start: Date; motifId?: string } | null>(null);
@@ -66,7 +69,10 @@ export function AgendaClient({
     });
     fetch(`/api/agenda?${params.toString()}`)
       .then((r) => r.json())
-      .then((d) => setAppointments(d.appointments ?? []))
+      .then((d) => {
+        setAppointments(d.appointments ?? []);
+        setTimeOffs(d.timeOffs ?? []);
+      })
       .finally(() => setLoading(false));
   }, [range.from, range.to, selected]);
 
@@ -78,7 +84,10 @@ export function AgendaClient({
     });
     fetch(`/api/agenda?${params.toString()}`)
       .then((r) => r.json())
-      .then((d) => setAppointments(d.appointments ?? []));
+      .then((d) => {
+        setAppointments(d.appointments ?? []);
+        setTimeOffs(d.timeOffs ?? []);
+      });
   }
 
   function navigate(dir: -1 | 1) {
@@ -162,6 +171,7 @@ export function AgendaClient({
               date={selectedDate}
               practitioners={selectedPractitioners}
               appointments={appointments}
+              timeOffs={timeOffs}
               onSlotClick={(practitionerId, date) => setNewAppt({ practitionerId, start: date })}
               onAppointmentClick={setViewAppt}
               onAppointmentDrop={handleAppointmentDrop}
@@ -172,6 +182,7 @@ export function AgendaClient({
               weekStart={selectedDate}
               practitioners={selectedPractitioners}
               appointments={appointments}
+              timeOffs={timeOffs}
               onSlotClick={(practitionerId, date) => setNewAppt({ practitionerId, start: date })}
               onAppointmentClick={setViewAppt}
               onAppointmentDrop={handleAppointmentDrop}
